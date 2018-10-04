@@ -104,6 +104,15 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		SET_UPPER_VOLTAGE(new Doc().unit(Unit.VOLT)),
 		SET_LOWER_VOLTAGE(new Doc().unit(Unit.VOLT)),
 
+		SET_IP_ADDRESS_1(new Doc().unit(Unit.NONE)),
+		SET_IP_ADDRESS_2(new Doc().unit(Unit.NONE)),
+		SET_IP_ADDRESS_3(new Doc().unit(Unit.NONE)),
+		SET_IP_ADDRESS_4(new Doc().unit(Unit.NONE)),
+		
+		IP_ADDRESS_1(new Doc().unit(Unit.NONE)),
+		IP_ADDRESS_2(new Doc().unit(Unit.NONE)),
+		IP_ADDRESS_3(new Doc().unit(Unit.NONE)),
+		IP_ADDRESS_4(new Doc().unit(Unit.NONE)),
 		
 		ANTI_ISLANDING(new Doc().unit(Unit.ON_OFF)),
 
@@ -378,7 +387,24 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		SET_CHARGE_DISCHARGE_CURRENT();
 	}
 	
-	
+	public void IP_ADDRESS() {
+		IntegerWriteChannel SET_IP_ADDRESS_1 = this.channel(ChannelId.SET_IP_ADDRESS_1);
+		IntegerWriteChannel SET_IP_ADDRESS_2 = this.channel(ChannelId.SET_IP_ADDRESS_2);
+		IntegerWriteChannel SET_IP_ADDRESS_3 = this.channel(ChannelId.SET_IP_ADDRESS_3);
+		IntegerWriteChannel SET_IP_ADDRESS_4 = this.channel(ChannelId.SET_IP_ADDRESS_4);
+		try {
+			SET_IP_ADDRESS_1.setNextWriteValue(ADDRESS_1);
+			SET_IP_ADDRESS_2.setNextWriteValue(ADDRESS_2);
+			SET_IP_ADDRESS_3.setNextWriteValue(ADDRESS_3);
+			SET_IP_ADDRESS_4.setNextWriteValue(ADDRESS_4);
+		}
+		catch (OpenemsException e) {
+			log.error("problem occurred while trying to write the IP Address" + e.getMessage());
+		}
+	}
+	public void doHandling_IP_ADDRESS() {
+		IP_ADDRESS();
+	}
 //---------------------------------------------SET UPPER/LOWER BATTERY VOLTAGE --------------------------------------------	
 	public void SET_UPPER_LOWER_BATTERY_VOLTAGE() {
 		
@@ -447,6 +473,15 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 				
 				new FC6WriteRegisterTask(0x0316, 
 						m(EssSinexcel.ChannelId.SET_ANTI_ISLANDING, new UnsignedWordElement(0x0316))), // Line194
+				
+				new FC6WriteRegisterTask(0x012C, 
+						m(EssSinexcel.ChannelId.SET_IP_ADDRESS_1, new UnsignedWordElement(0x012C))),
+				new FC6WriteRegisterTask(0x012D, 
+						m(EssSinexcel.ChannelId.SET_IP_ADDRESS_2, new UnsignedWordElement(0x012D))),
+				new FC6WriteRegisterTask(0x012E, 
+						m(EssSinexcel.ChannelId.SET_IP_ADDRESS_3, new UnsignedWordElement(0x012E))),
+				new FC6WriteRegisterTask(0x012F, 
+						m(EssSinexcel.ChannelId.SET_IP_ADDRESS_4, new UnsignedWordElement(0x012F))),
 				
 //----------------------------------------------------------READ------------------------------------------------------
 				new FC3ReadRegistersTask(0x024A, Priority.HIGH, //
@@ -754,10 +789,19 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)),					//uint 16 // Line219 // 10
 				new FC3ReadRegistersTask(0x032E, Priority.LOW, //
 						m(EssSinexcel.ChannelId.Upper_Voltage_Limit, new UnsignedWordElement(0x032E),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1))					//uint16 // line220 // 10
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)),					//uint16 // line220 // 10
 				
 //				new FC3ReadRegistersTask(0x02EE, Priority.HIGH, //
 //						m(EssSinexcel.ChannelId.Test_Register, new UnsignedWordElement(0x02EE)))				// TESTOBJEKT
+				
+				new FC3ReadRegistersTask(0x012C, Priority.HIGH, //
+						m(EssSinexcel.ChannelId.IP_ADDRESS_1, new UnsignedWordElement(0x012C))),
+				new FC3ReadRegistersTask(0x012D, Priority.HIGH, //
+						m(EssSinexcel.ChannelId.IP_ADDRESS_2, new UnsignedWordElement(0x012D))),
+				new FC3ReadRegistersTask(0x012E, Priority.HIGH, //
+						m(EssSinexcel.ChannelId.IP_ADDRESS_3, new UnsignedWordElement(0x012E))),
+				new FC3ReadRegistersTask(0x012F, Priority.HIGH, //
+						m(EssSinexcel.ChannelId.IP_ADDRESS_4, new UnsignedWordElement(0x012F)))
 		);
 	
 
@@ -818,6 +862,11 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private Power power;
 	private CircleConstraint maxApparentPowerConstraint = null;
 	
+	private int ADDRESS_1 = 192;
+	private int ADDRESS_2 = 168;
+	private int ADDRESS_3 = 1;
+	private int ADDRESS_4 = 12;
+	
 	private int MAX_REACTIVE_POWER = 300;	// 30 kW
 	private int MAX_ACTIVE_POWER = 300;	// 30 kW
 	
@@ -848,8 +897,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		
 		switch (event.getTopic()) {
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-			doHandling_ON();
+			doHandling_OFF();
 			LIMITS();
+			doHandling_IP_ADDRESS();
 			
 //			if(island = true) {
 //				doHandling_ISLANDING_ON();

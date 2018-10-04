@@ -108,7 +108,12 @@ public class Utils {
 					case Upper_Voltage_Limit:
 					case Target_Active_Power:
 					case Target_Reactive_Power:
-
+						
+					case IP_ADDRESS_1:
+					case IP_ADDRESS_2:
+					case IP_ADDRESS_3:
+					case IP_ADDRESS_4:
+						
 		
 						return new IntegerReadChannel(ess, channelId);
 					case SETDATA_MOD_ON_CMD:
@@ -124,6 +129,10 @@ public class Utils {
 					case SET_FLOAT_CHARGE_VOLTAGE:
 					case SET_UPPER_VOLTAGE:
 					case SET_LOWER_VOLTAGE:
+					case SET_IP_ADDRESS_1:
+					case SET_IP_ADDRESS_2:
+					case SET_IP_ADDRESS_3:
+					case SET_IP_ADDRESS_4:
 						return new IntegerWriteChannel(ess, channelId);
 						
 					case Serial:
