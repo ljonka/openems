@@ -865,7 +865,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private int ADDRESS_1 = 192;
 	private int ADDRESS_2 = 168;
 	private int ADDRESS_3 = 1;
-	private int ADDRESS_4 = 12;
+	private int ADDRESS_4 = 11;
 	
 	private int MAX_REACTIVE_POWER = 300;	// 30 kW
 	private int MAX_ACTIVE_POWER = 300;	// 30 kW
