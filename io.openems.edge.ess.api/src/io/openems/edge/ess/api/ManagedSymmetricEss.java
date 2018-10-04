@@ -1,22 +1,46 @@
 package io.openems.edge.ess.api;
 
-import org.apache.commons.math3.optim.linear.Relationship;
 import org.osgi.annotation.versioning.ProviderType;
 
 import io.openems.common.types.OpenemsType;
+import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.channel.doc.Doc;
 import io.openems.edge.common.channel.doc.Unit;
 import io.openems.edge.ess.power.api.Constraint;
-import io.openems.edge.ess.power.api.ConstraintType;
 import io.openems.edge.ess.power.api.Phase;
 import io.openems.edge.ess.power.api.Power;
 import io.openems.edge.ess.power.api.PowerException;
 import io.openems.edge.ess.power.api.Pwr;
+import io.openems.edge.ess.power.api.Relationship;
 
 @ProviderType
 public interface ManagedSymmetricEss extends SymmetricEss {
 
 	public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
+		/**
+		 * Holds the currently maximum allowed charge power. This value is commonly
+		 * defined by current battery limitations.
+		 * 
+		 * <ul>
+		 * <li>Interface: Managed Symmetric Ess
+		 * <li>Type: Integer
+		 * <li>Unit: W
+		 * <li>Range: zero or negative value
+		 * </ul>
+		 */
+		ALLOWED_CHARGE_POWER(new Doc().unit(Unit.WATT)), //
+		/**
+		 * Holds the currently maximum allowed discharge power. This value is commonly
+		 * defined by current battery limitations.
+		 * 
+		 * <ul>
+		 * <li>Interface: Managed Symmetric Ess
+		 * <li>Type: Integer
+		 * <li>Unit: W
+		 * <li>Range: zero or positive value
+		 * </ul>
+		 */
+		ALLOWED_DISCHARGE_POWER(new Doc().unit(Unit.WATT)), //
 		/**
 		 * Holds settings of Active Power for debugging
 		 * 
@@ -42,7 +66,7 @@ public interface ManagedSymmetricEss extends SymmetricEss {
 		 * just before it calls the onWriteListener (which writes the value to the Ess)
 		 * </ul>
 		 */
-		DEBUG_SET_REACTIVE_POWER(new Doc().type(OpenemsType.INTEGER).unit(Unit.VOLT_AMPERE_REACTIVE)), //
+		DEBUG_SET_REACTIVE_POWER(new Doc().type(OpenemsType.INTEGER).unit(Unit.VOLT_AMPERE_REACTIVE)) //
 		;
 
 		private final Doc doc;
@@ -63,6 +87,24 @@ public interface ManagedSymmetricEss extends SymmetricEss {
 	 * @return
 	 */
 	public Power getPower();
+
+	/**
+	 * Gets the Allowed Charge Power in [W], range "<= 0"
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getAllowedCharge() {
+		return this.channel(ChannelId.ALLOWED_CHARGE_POWER);
+	}
+
+	/**
+	 * Gets the Allowed Discharge Power in [W], range ">= 0"
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getAllowedDischarge() {
+		return this.channel(ChannelId.ALLOWED_DISCHARGE_POWER);
+	}
 
 	/**
 	 * Apply the calculated Power
@@ -86,36 +128,60 @@ public interface ManagedSymmetricEss extends SymmetricEss {
 	public int getPowerPrecision();
 
 	/**
-	 * Adds a Power constraint.
+	 * Gets static Constraints for this Ess. Override this method to provide
+	 * specific Constraints for this Ess on every Cycle.
 	 * 
-	 * @param type         Whether this Constraint is STATIC or for one CYCLE only.
-	 * @param phase        Apply Constraint on Phase L1, L2, L3 or on ALL Phases
-	 * @param pwr          Constraint for ACTIVE or REACTIVE Power
-	 * @param relationship Is the Constraint EQ (Equal), GEQ (Greater or Equal) or
-	 *                     LEQ (Less or Equal)?
-	 * @param value        The Constraint value (right side of the equation)
-	 * @return the added Constraint
+	 * @return
 	 */
-	public default Constraint addPowerConstraint(ConstraintType type, Phase phase, Pwr pwr, Relationship relationship,
-			int value) {
-		return this.getPower().addSimpleConstraint(this, type, phase, pwr, relationship, value);
+	public default Constraint[] getStaticConstraints() {
+		return Power.NO_CONSTRAINTS;
 	}
 
 	/**
-	 * Adds a Power constraint if the problem is still solvable after adding it.
+	 * Creates a Power Constraint
 	 * 
-	 * @param type         Whether this Constraint is STATIC or for one CYCLE only.
-	 * @param phase        Apply Constraint on Phase L1, L2, L3 or on ALL Phases
-	 * @param pwr          Constraint for ACTIVE or REACTIVE Power
-	 * @param relationship Is the Constraint EQ (Equal), GEQ (Greater or Equal) or
-	 *                     LEQ (Less or Equal)?
-	 * @param value        The Constraint value (right side of the equation)
-	 * @return the added Constraint
-	 * @throws PowerException if the problem is not solvable after adding the
-	 *                        Constraint. In this case the Constraint was not added.
+	 * @param ess
+	 * @param phase
+	 * @param pwr
+	 * @param relationship
+	 * @param value
 	 */
-	public default Constraint addPowerConstraintAndValidate(ConstraintType type, Phase phase, Pwr pwr,
-			Relationship relationship, int value) throws PowerException {
-		return this.getPower().addSimpleConstraintAndValidate(this, type, phase, pwr, relationship, value);
+	public default Constraint createPowerConstraint(String description, Phase phase, Pwr pwr, Relationship relationship,
+			double value) {
+		return this.getPower().createSimpleConstraint(description, this, phase, pwr, relationship, value);
+	}
+
+	/**
+	 * Adds a Power Constraint for the current Cycle.
+	 * 
+	 * To add a Constraint on every Cycle, use getStaticConstraints()
+	 * 
+	 * @param ess
+	 * @param phase
+	 * @param pwr
+	 * @param relationship
+	 * @param value
+	 */
+	public default Constraint addPowerConstraint(String description, Phase phase, Pwr pwr, Relationship relationship,
+			double value) {
+		return this.getPower().addConstraint(this.createPowerConstraint(description, phase, pwr, relationship, value));
+	}
+
+	/**
+	 * Adds a Power Constraint for the current Cycle.
+	 * 
+	 * To add a Constraint on every Cycle, use getStaticConstraints()
+	 * 
+	 * @param ess
+	 * @param phase
+	 * @param pwr
+	 * @param relationship
+	 * @param value
+	 * @throws PowerException
+	 */
+	public default Constraint addPowerConstraintAndValidate(String description, Phase phase, Pwr pwr,
+			Relationship relationship, double value) throws PowerException {
+		return this.getPower()
+				.addConstraintAndValidate(this.createPowerConstraint(description, phase, pwr, relationship, value));
 	}
 }

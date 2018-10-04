@@ -33,7 +33,10 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 	private int chargeMaxVoltage;
 	private int disChargeMaxCurrent;
 	private int chargeMaxCurrent;
-	private int SOC;
+	private int soc;
+	private int soh;
+	private int temperature;
+	private int capacityKWh;
 
 	public BatteryDummy() {
 		Utils.initializeChannels(this).forEach(channel -> this.addChannel(channel));
@@ -46,7 +49,10 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 		chargeMaxVoltage = config.chargeMaxVoltage();
 		disChargeMaxCurrent = config.disChargeMaxCurrent();
 		chargeMaxCurrent = config.chargeMaxCurrent();
-		SOC = config.SOC();
+		soc = config.soc();
+		soh = config.soh();
+		temperature = config.temperature();
+		capacityKWh = config.capacityKWh();
 	}
 
 	@Override
@@ -64,19 +70,24 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 		IntegerWriteChannel disChargeMaxCurrentChannel = this.channel(Battery.ChannelId.DISCHARGE_MAX_CURRENT);
 		IntegerWriteChannel chargeMaxCurrentChannel = this.channel(Battery.ChannelId.CHARGE_MAX_CURRENT);
 		IntegerWriteChannel socChannel = this.channel(Battery.ChannelId.SOC);
+		IntegerWriteChannel sohChannel = this.channel(Battery.ChannelId.SOH);
+		IntegerWriteChannel tempChannel = this.channel(Battery.ChannelId.BATTERY_TEMP);
+		IntegerWriteChannel capacityChannel = this.channel(Battery.ChannelId.CAPACITY_KWH);
 
 		try {
 			disChargeMinVoltageChannel.setNextWriteValue(disChargeMinVoltage);
 			chargeMaxVoltageChannel.setNextWriteValue(chargeMaxVoltage);
 			disChargeMaxCurrentChannel.setNextWriteValue(disChargeMaxCurrent);
 			chargeMaxCurrentChannel.setNextWriteValue(chargeMaxCurrent);
-			socChannel.setNextWriteValue(SOC);
-			
+			socChannel.setNextValue(soc);
+			sohChannel.setNextValue(soh);
+			tempChannel.setNextValue(temperature);
+			capacityChannel.setNextWriteValue(capacityKWh);
+		
 			disChargeMinVoltageChannel.setNextValue(disChargeMinVoltage);
 			chargeMaxVoltageChannel.setNextValue(chargeMaxVoltage);
 			disChargeMaxCurrentChannel.setNextValue(disChargeMaxCurrent);
 			chargeMaxCurrentChannel.setNextValue(chargeMaxCurrent);
-			socChannel.setNextValue(SOC);
 
 		} catch (OpenemsException e) {
 			log.error("Error occurred while writing channel values! " + e.getMessage());

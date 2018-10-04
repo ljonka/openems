@@ -1,5 +1,7 @@
 package io.openems.edge.bridge.modbus.api;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -16,7 +18,7 @@ import io.openems.common.types.OpenemsType;
 import io.openems.edge.bridge.modbus.api.element.AbstractModbusElement;
 import io.openems.edge.bridge.modbus.api.element.ModbusCoilElement;
 import io.openems.edge.bridge.modbus.api.element.ModbusRegisterElement;
-import io.openems.edge.bridge.modbus.api.element.StringWordElement;
+import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.channel.WriteChannel;
@@ -42,26 +44,21 @@ public abstract class AbstractOpenemsModbusComponent extends AbstractOpenemsComp
 	/**
 	 * Call this method from Component implementations activate().
 	 * 
-	 * @param context
-	 *            ComponentContext of this component. Receive it from parameter
-	 *            for @Activate
-	 * @param servicePid
-	 *            The service_pid of this Component. Typically
-	 *            'config.service_pid()'
-	 * @param id
-	 *            ID of this component. Typically 'config.id()'
-	 * @param enabled
-	 *            Whether the component should be enabled. Typically
-	 *            'config.enabled()'
-	 * @param unitId
-	 *            Unit-ID of the Modbus target
-	 * @param cm
-	 *            An instance of ConfigurationAdmin. Receive it using @Reference
-	 * @param modbusReference
-	 *            The name of the @Reference setter method for the Modbus bridge -
-	 *            e.g. 'Modbus' if you have a setModbus()-method
-	 * @param modbusId
-	 *            The ID of the Modbus brige. Typically 'config.modbus_id()'
+	 * @param context         ComponentContext of this component. Receive it from
+	 *                        parameter for @Activate
+	 * @param servicePid      The service_pid of this Component. Typically
+	 *                        'config.service_pid()'
+	 * @param id              ID of this component. Typically 'config.id()'
+	 * @param enabled         Whether the component should be enabled. Typically
+	 *                        'config.enabled()'
+	 * @param unitId          Unit-ID of the Modbus target
+	 * @param cm              An instance of ConfigurationAdmin. Receive it
+	 *                        using @Reference
+	 * @param modbusReference The name of the @Reference setter method for the
+	 *                        Modbus bridge - e.g. 'Modbus' if you have a
+	 *                        setModbus()-method
+	 * @param modbusId        The ID of the Modbus brige. Typically
+	 *                        'config.modbus_id()'
 	 */
 	protected void activate(ComponentContext context, String servicePid, String id, boolean enabled, int unitId,
 			ConfigurationAdmin cm, String modbusReference, String modbusId) {
@@ -77,6 +74,10 @@ public abstract class AbstractOpenemsModbusComponent extends AbstractOpenemsComp
 		}
 	}
 
+	protected void activate(ComponentContext context, String service_pid, String id, boolean enabled) {
+		throw new IllegalArgumentException("Use the other activate() for Modbus compoenents!");
+	}
+	
 	@Override
 	protected void deactivate() {
 		super.deactivate();
@@ -114,18 +115,16 @@ public abstract class AbstractOpenemsModbusComponent extends AbstractOpenemsComp
 		if (protocol != null) {
 			return protocol;
 		}
-		this.protocol = defineModbusProtocol(unitId);
+		this.protocol = this.defineModbusProtocol();
 		return this.protocol;
 	}
 
 	/**
 	 * Defines the Modbus protocol
 	 * 
-	 * @param unitId
-	 * 
 	 * @return
 	 */
-	protected abstract ModbusProtocol defineModbusProtocol(int unitId);
+	protected abstract ModbusProtocol defineModbusProtocol();
 
 	/**
 	 * Maps an Element to one or more ModbusChannels using converters, that convert
@@ -150,9 +149,7 @@ public abstract class AbstractOpenemsModbusComponent extends AbstractOpenemsComp
 					} catch (IllegalArgumentException e) {
 						throw new IllegalArgumentException("Conversion for [" + channel.channelId() + "] failed", e);
 					}
-					if (convertedValue != null) {
 						channel.setNextValue(convertedValue);
-					}
 				});
 			});
 		}
@@ -288,5 +285,127 @@ public abstract class AbstractOpenemsModbusComponent extends AbstractOpenemsComp
 	protected final BitChannelMapper bm(UnsignedWordElement element) {
 		return new BitChannelMapper(element);
 	}
+	
+	/**
+	 * Handles channels that are mapping to one bit of a 
+	 * modbus unsigned double word element
+	 */
+	public class DoubleWordBitChannelMapper {
+		private final UnsignedDoublewordElement element;
+		private final Map<Integer, Channel<?>> channels = new HashMap<>();
+
+		public DoubleWordBitChannelMapper(UnsignedDoublewordElement element) {
+			this.element = element;
+			this.element.onUpdateCallback((value) -> {
+				this.channels.forEach((bitIndex, channel) -> {
+					channel.setNextValue(value << ~bitIndex < 0);
+				});
+			});
+		}
+
+		public DoubleWordBitChannelMapper m(io.openems.edge.common.channel.doc.ChannelId channelId, int bitIndex) {
+			Channel<?> channel = channel(channelId);
+			if (channel.getType() != OpenemsType.BOOLEAN) {
+				throw new IllegalArgumentException(
+						"Channel [" + channelId + "] must be of type [BOOLEAN] for bit-mapping.");
+			}
+			this.channels.put(bitIndex, channel);
+			return this;
+		}
+
+		public UnsignedDoublewordElement build() {
+			return this.element;
+		}
+	}
+
+	/**
+	 * Creates a DoubleWordBitChannelMapper that can be used with builder pattern inside the
+	 * protocol definition.
+	 * 
+	 * @param element
+	 * @return
+	 */
+	protected final DoubleWordBitChannelMapper bm(UnsignedDoublewordElement element) {
+		return new DoubleWordBitChannelMapper(element);
+	}
+	
+	
+	/**
+	 * Handles channels that are mapping two bytes of a 
+	 * modbus unsigned double word element
+	 */
+	public class DoubleWordByteChannelMapper {
+		private final UnsignedDoublewordElement element;
+		private final Map<Integer, Channel<?>> channels = new HashMap<>();
+
+		public DoubleWordByteChannelMapper(UnsignedDoublewordElement element) {
+			this.element = element;
+			this.element.onUpdateCallback((value) -> {
+				this.channels.forEach((index, channel) -> {
+					
+					Integer val = value.intValue();
+					
+					Short valueToSet = convert(val, index);
+					
+					channel.setNextValue(valueToSet);
+				});
+			});
+		}
+		
+
+
+		/**
+		 * 
+		 * @param channelId
+		 * @param upperBytes  1 = upper two bytes, 0 = lower two bytes
+		 * @return
+		 */
+		public DoubleWordByteChannelMapper mapByte(io.openems.edge.common.channel.doc.ChannelId channelId, int upperBytes) {
+			Channel<?> channel = channel(channelId);
+			if (channel.getType() != OpenemsType.SHORT) {
+				throw new IllegalArgumentException(
+						"Channel [" + channelId + "] must be of type [SHORT] for byte-mapping.");
+			}
+			this.channels.put(upperBytes, channel);
+			return this;
+		}
+
+		public UnsignedDoublewordElement build() {
+			return this.element;
+		}
 
 	}
+
+	/**
+	 * Creates a DoubleWordBitChannelMapper that can be used with builder pattern inside the
+	 * protocol definition.
+	 * 
+	 * @param element
+	 * @return
+	 */
+	protected final DoubleWordByteChannelMapper byteMap(UnsignedDoublewordElement element) {
+		return new DoubleWordByteChannelMapper(element);
+	}
+	
+	/**
+	 * 
+	 * @param value
+	 * @param upperBytes  1 = upper two bytes, 0 = lower two bytes
+	 * @return
+	 */
+	public static Short convert(int value, int upperBytes) {
+		ByteBuffer b = ByteBuffer.allocate(4);
+		b.order(ByteOrder.LITTLE_ENDIAN);
+		b.putInt(value);
+			
+		byte byte0 = b.get(upperBytes * 2);
+		byte byte1 = b.get(upperBytes * 2 + 1);
+		
+		ByteBuffer shortBuf = ByteBuffer.allocate(2);
+		shortBuf.order(ByteOrder.LITTLE_ENDIAN);
+		shortBuf.put(0, byte0);
+		shortBuf.put(1, byte1);
+		
+		return shortBuf.getShort();
+	}
+}

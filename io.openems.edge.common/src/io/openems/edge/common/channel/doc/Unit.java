@@ -37,6 +37,10 @@ public enum Unit {
 	 */
 	MILLIWATT("mW", WATT, -3),
 	/**
+	 * Unit of Active Power [kW]
+	 */
+	KILOWATT("kW", WATT, 3),
+	/**
 	 * Unit of Reactive Power [var]
 	 */
 	VOLT_AMPERE_REACTIVE("var"),
@@ -133,6 +137,10 @@ public enum Unit {
 	 * Unit of Time in Seconds [s]
 	 */
 	SECONDS("sec"),
+	/**
+	 * Unit of Frequency [mHz]
+	 */
+	MILLISECONDS("ms", SECONDS, -3),
 	
 	/*
 	 * Resistance
@@ -190,6 +198,8 @@ public enum Unit {
 		case VOLT_AMPERE:
 		case VOLT_AMPERE_REACTIVE:
 		case WATT:
+		case KILOWATT:
+		case MILLIWATT:
 		case WATT_HOURS:
 		case OHM:
 		case KILOOHM:
