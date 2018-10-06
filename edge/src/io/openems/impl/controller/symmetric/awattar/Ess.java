@@ -23,25 +23,31 @@ package io.openems.impl.controller.symmetric.awattar;
 import io.openems.api.channel.ReadChannel;
 import io.openems.api.controller.IsThingMap;
 import io.openems.api.controller.ThingMap;
-import io.openems.api.device.nature.ess.SymmetricEssNature;
-import io.openems.core.utilities.power.symmetric.PEqualLimitation;
-import io.openems.core.utilities.power.symmetric.SymmetricPower;
+import io.openems.api.device.nature.ess.AsymmetricEssNature;
 
-@IsThingMap(type = SymmetricEssNature.class)
+@IsThingMap(type = AsymmetricEssNature.class)
 public class Ess extends ThingMap {
 
 	public final ReadChannel<Long> allowedCharge;
 	public final ReadChannel<Long> allowedDischarge;
-	public final SymmetricPower power;
-	public final PEqualLimitation activePowerLimit;
+	public ReadChannel<Long> activePowerL1;
+	public ReadChannel<Long> activePowerL2;
+	public ReadChannel<Long> activePowerL3;
+	public ReadChannel<Long> soc;
+	//	public final SymmetricPower power;
+	//	public final PEqualLimitation activePowerLimit;
 
-	public Ess(SymmetricEssNature ess) {
+	public Ess(AsymmetricEssNature ess) {
 		super(ess);
 
 		allowedCharge = ess.allowedCharge().required();
 		allowedDischarge = ess.allowedDischarge().required();
-		power = ess.getPower();
-		activePowerLimit = new PEqualLimitation(power);
+		activePowerL1 = ess.activePowerL1().required();
+		activePowerL2 = ess.activePowerL2().required();
+		activePowerL3 = ess.activePowerL3().required();
+		soc = ess.soc().required();
+		//		power = ess.getPower();
+		//		activePowerLimit = new PEqualLimitation(power);
 
 	}
 

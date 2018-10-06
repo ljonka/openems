@@ -21,6 +21,7 @@
 package io.openems.impl.controller.symmetric.awattar;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,8 +54,8 @@ public class AwattarController extends Controller {
 	 * Config
 	 */
 
-	@ChannelInfo(title = "Ess", description = "Sets the Ess device.", type = Ess.class)
-	public ConfigChannel<Ess> ess = new ConfigChannel<Ess>("ess", this);
+	@ChannelInfo(title = "Ess", description = "Sets the Ess device.", type = Ess.class, isArray = true)
+	public ConfigChannel<Set<Ess>> esss = new ConfigChannel<Set<Ess>>("esss", this);
 
 	@ChannelInfo(title = "Grid-Meter", description = "Sets the grid meter.", type = Meter.class)
 	public ConfigChannel<Meter> gridMeter = new ConfigChannel<Meter>("gridMeter", this);
@@ -64,6 +65,10 @@ public class AwattarController extends Controller {
 
 	private final CalculateTotalConsumption calculateTotalConsumption = new CalculateTotalConsumption(this);
 	boolean executed = false;
+	private long cheapHourStartTimeStamp = 0;
+	private long cheapHourEndTimeStamp = 0;
+	LocalDateTime startTimeStamp = null;
+	LocalDateTime endTimeStamp = null;
 
 	/*
 	 * Methods
@@ -79,7 +84,7 @@ public class AwattarController extends Controller {
 		 * First stage:
 		 *
 		 * Find out the consumption over night
-		 * e.g. 2000 Wh = 2 kW
+		 * e.g. 15 kWh
 		 */
 		log.info("Calculating the required consumption to charge ");
 		this.calculateTotalConsumption.run();
@@ -91,14 +96,22 @@ public class AwattarController extends Controller {
 		 * e.g. starting from 3 a.m. charge with 2 kW for 1 hour.
 		 */
 
-		if (!executed && hourOfDay == 14) {
-			log.info("Reading the Json file to get cheapest hour and timestamps during " + hourOfDay);
-			JsonData.jsonRead("Data.json");
-			executed = true;
-		}
-		if(executed && hourOfDay > 14) {
-			executed = false;
-		}
+		// if (!executed && hourOfDay == 14) {
+		// log.info("Reading the Json file to get cheapest hour and timestamps during " + hourOfDay);
+		// JsonData.jsonRead("Data.json");
+		// cheapHourStartTimeStamp = JsonData.startTimeStamp();
+		// cheapHourEndTimeStamp = JsonData.endTimeStamp();
+		// startTimeStamp = LocalDateTime.ofInstant(Instant.ofEpochMilli(cheapHourStartTimeStamp),
+		// ZoneId.systemDefault());
+		// endTimeStamp = LocalDateTime.ofInstant(Instant.ofEpochMilli(cheapHourEndTimeStamp), ZoneId.systemDefault());
+		// // if(startTimeStamp.getHour() <= 23) {
+		// //
+		// // }
+		// executed = true;
+		// }
+		// if(executed && hourOfDay > 14) {
+		// executed = false;
+		// }
 		/*
 		 * Third stage:
 		 *
@@ -106,19 +119,19 @@ public class AwattarController extends Controller {
 		 * e.g. Between 3 and 4 a.m. -> set the charge power to 2 kW
 		 */
 
-		if (System.currentTimeMillis() >= JsonData.startTimeStamp()
-				&& System.currentTimeMillis() <= JsonData.endTimeStamp()) {
-			log.info("Charging the power during cheapest hour");
-
-			//			try {
-			//				this.ess.value().activePowerLimit.setP(4000l);
-			//				this.ess.value().power.applyLimitation(ess.value().activePowerLimit);
-			//			} catch (InvalidValueException e) {
-			//				log.error("No ess found.", e);
-			//			} catch (PowerException e) {
-			//				log.error("Failed to set Power!", e);
-			//			}
-		}
+		// if (System.currentTimeMillis() >= JsonData.startTimeStamp()
+		// && System.currentTimeMillis() <= JsonData.endTimeStamp()) {
+		// log.info("Charging the power during cheapest hour");
+		//
+		// // try {
+		// // this.ess.value().activePowerLimit.setP(4000l);
+		// // this.ess.value().power.applyLimitation(ess.value().activePowerLimit);
+		// // } catch (InvalidValueException e) {
+		// // log.error("No ess found.", e);
+		// // } catch (PowerException e) {
+		// // log.error("Failed to set Power!", e);
+		// // }
+		// }
 
 	}
 
