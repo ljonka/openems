@@ -31,15 +31,18 @@ public class Utils {
 					case REACTIVE_POWER:
 					case ACTIVE_CHARGE_ENERGY: // TODO ACTIVE_CHARGE_ENERGY
 					case ACTIVE_DISCHARGE_ENERGY: // TODO ACTIVE_DISCHARGE_ENERGY
-					case MAX_ACTIVE_POWER:
 					case GRID_MODE:
 						return new IntegerReadChannel(ess, channelId);
+					case MAX_APPARENT_POWER:
+						return new IntegerReadChannel(ess, channelId, EssSinexcel.MAX_APPARENT_POWER);
 					}
 					return null;
 				}), Arrays.stream(ManagedSymmetricEss.ChannelId.values()).map(channelId -> {
 					switch (channelId) {
 					case DEBUG_SET_ACTIVE_POWER:
 					case DEBUG_SET_REACTIVE_POWER:
+					case ALLOWED_CHARGE_POWER:
+					case ALLOWED_DISCHARGE_POWER:
 						return new IntegerReadChannel(ess, channelId);
 					}
 					return null;

@@ -40,7 +40,6 @@ import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.api.SymmetricEss;
-import io.openems.edge.ess.power.api.CircleConstraint;
 import io.openems.edge.ess.power.api.Power;
 
 
@@ -57,6 +56,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private final Logger log = LoggerFactory.getLogger(EssSinexcel.class);
 
 	public static final int DEFAULT_UNIT_ID = 1;
+	public static final int MAX_APPARENT_POWER = 30000; // [VA]
 
 	@Reference
 	protected ConfigurationAdmin cm;
@@ -438,8 +438,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	
 //------------------------------------------------------------------------------------------------------------------	
 	
-	protected ModbusProtocol defineModbusProtocol(int unitId) {
-		return new ModbusProtocol(unitId, //
+	@Override
+	protected ModbusProtocol defineModbusProtocol() {
+		return new ModbusProtocol(this, //
 //------------------------------------------------------------WRITE-----------------------------------------------------------
 				new FC6WriteRegisterTask(0x028A, 
 						m(EssSinexcel.ChannelId.SETDATA_MOD_ON_CMD, new UnsignedWordElement(0x028A))), // Start// SETDATA_ModOnCmd				
@@ -552,7 +553,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),										// 100
 				
 				new FC3ReadRegistersTask(0x007A, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_ActivePower_3Phase, new SignedWordElement(0x007A))),				// 1 
+						m(EssSinexcel.ChannelId.Analog_ActivePower_3Phase, new SignedWordElement(0x007A),
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),				// 1 
 				new FC3ReadRegistersTask(0x007B, Priority.HIGH,
 						m(EssSinexcel.ChannelId.Analog_ReactivePower_3Phase, new SignedWordElement(0x007B))),			// 1
 				new FC3ReadRegistersTask(0x007C, Priority.HIGH,
@@ -605,7 +607,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),				// int16 // Line69 // Magnification = 100
 				
 				new FC3ReadRegistersTask(0x0255, Priority.HIGH,
-						m(EssSinexcel.ChannelId.DC_Current, new SignedWordElement(0x0255))),			// int16 // Line142 // Magnification = 10
+						m(EssSinexcel.ChannelId.DC_Current, new SignedWordElement(0x0255),
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)),			// int16 // Line142 // Magnification = 10
 				
 				new FC3ReadRegistersTask(0x0257, Priority.HIGH, //
 						m(EssSinexcel.ChannelId.DC_Voltage, new UnsignedWordElement(0x0257),
@@ -808,7 +811,6 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	}
 //------------------------------------------------------------------------------------------------------------------------
 	private void LIMITS() {					//Watch KACO initialize
-		this.maxApparentPowerConstraint = new CircleConstraint(this, 30000);
 		doHandling_UPPER_LOWER_VOLTAGE();
 		doHandling_CHARGE_DISCHARGE_CURRENT();
 		
@@ -860,7 +862,6 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	
 	@Reference
 	private Power power;
-	private CircleConstraint maxApparentPowerConstraint = null;
 	
 	private int ADDRESS_1 = 192;
 	private int ADDRESS_2 = 168;
@@ -875,11 +876,11 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private int START = 1;
 	private int STOP = 1;
 	
-	private int SLOW_CHARGE_VOLTAGE = 3800;		// Slow and Float Charge Voltage must be the same for the Lithium Ion battery. 
-	private int FLOAT_CHARGE_VOLTAGE = 3800;		
+	private int SLOW_CHARGE_VOLTAGE = 3900;		// Slow and Float Charge Voltage must be the same for the Lithium Ion battery. 
+	private int FLOAT_CHARGE_VOLTAGE = 3900;		
 	
-	private int LOWER_BAT_VOLTAGE = 3000;
-	private int UPPER_BAT_VOLTAGE = 3900;
+	private int LOWER_BAT_VOLTAGE = 2900;
+	private int UPPER_BAT_VOLTAGE = 3950;
 	
 	private int CHARGE_CURRENT = 900;				// [CHARGE_CURRENT] = A // Range = 0 A ... 90 A
 	private int DISCHARGE_CURRENT = 900;			// [DISCHARGE_CURRENT] = A	// Range = 0 A ... 90 A
@@ -897,9 +898,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		
 		switch (event.getTopic()) {
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-			doHandling_OFF();
+			doHandling_ON();
 			LIMITS();
-			doHandling_IP_ADDRESS();
+//			doHandling_IP_ADDRESS();
 			
 //			if(island = true) {
 //				doHandling_ISLANDING_ON();
