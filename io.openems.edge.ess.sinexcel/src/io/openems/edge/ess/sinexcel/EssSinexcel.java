@@ -553,7 +553,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),										// 100
 				
 				new FC3ReadRegistersTask(0x007A, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_ActivePower_3Phase, new SignedWordElement(0x007A))),				// 1 
+						m(EssSinexcel.ChannelId.Analog_ActivePower_3Phase, new SignedWordElement(0x007A),
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),				// 1 
 				new FC3ReadRegistersTask(0x007B, Priority.HIGH,
 						m(EssSinexcel.ChannelId.Analog_ReactivePower_3Phase, new SignedWordElement(0x007B))),			// 1
 				new FC3ReadRegistersTask(0x007C, Priority.HIGH,
@@ -606,7 +607,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),				// int16 // Line69 // Magnification = 100
 				
 				new FC3ReadRegistersTask(0x0255, Priority.HIGH,
-						m(EssSinexcel.ChannelId.DC_Current, new SignedWordElement(0x0255))),			// int16 // Line142 // Magnification = 10
+						m(EssSinexcel.ChannelId.DC_Current, new SignedWordElement(0x0255),
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)),			// int16 // Line142 // Magnification = 10
 				
 				new FC3ReadRegistersTask(0x0257, Priority.HIGH, //
 						m(EssSinexcel.ChannelId.DC_Voltage, new UnsignedWordElement(0x0257),
