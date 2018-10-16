@@ -1,6 +1,8 @@
 package io.openems.edge.meter.bsmu;
 
 import java.util.Collection;
+import java.util.Optional;
+
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
@@ -26,6 +28,7 @@ import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
+import io.openems.edge.common.channel.StateChannel;
 import io.openems.edge.common.channel.doc.Doc;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
@@ -129,6 +132,18 @@ private void stopBSMU() {
 	}
 }
 
+public boolean End_of_Charge_1() {
+	StateChannel i = this.channel(ChannelId.END_OF_CHARGE_REQUEST_1);
+	Optional<Boolean> End = i.getNextValue().asOptional();
+	return End.isPresent() && End.get();
+}
+public boolean End_of_Charge_2() {
+	StateChannel i = this.channel(ChannelId.END_OF_CHARGE_REQUEST_2);
+	Optional<Boolean> End = i.getNextValue().asOptional();
+	return End.isPresent() && End.get();
+}
+private boolean EndCharge_1 = End_of_Charge_1();
+private boolean EndCharge_2 = End_of_Charge_2();
 
 public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 	
