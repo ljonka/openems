@@ -92,41 +92,62 @@ private void HandleBatteryState() {
 	
 	switch (this.batteryState) {
 	case OFF:
-		stopBSMU();
+		stopBAT_1();
+		stopBAT_2();
 		break;
 	case ON:
-		startBSMU();
+		startBAT_1();
+		startBAT_2();
 		break;
 	}
 }
 
-private void startBSMU() {
+private void startBAT_1() {
 	IntegerWriteChannel SET_START_STOP_1 = this.channel(ChannelId.SET_START_STOP_STRING_1);
-	IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
 
 	try {
 	SET_START_STOP_1.setNextWriteValue(Start);
+	} 
+
+	catch (OpenemsException e) {
+	log.error("Error while trying to start string 1\n" + e.getMessage());
+	}
+}
+private void startBAT_2() {
+	IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
+
+	try {
 	SET_START_STOP_2.setNextWriteValue(Start);
 	} 
 
 	catch (OpenemsException e) {
-	log.error("Error while trying to start system\n" + e.getMessage());
+	log.error("Error while trying to start string 2\n" + e.getMessage());
 	}
 }
 
-private void stopBSMU() {
+private void stopBAT_1() {
 		IntegerWriteChannel SET_START_STOP_1 = this.channel(ChannelId.SET_START_STOP_STRING_1);
-		IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
 
 	
 	try {
 		SET_START_STOP_1.setNextWriteValue(Stop);
-		SET_START_STOP_2.setNextWriteValue(Stop);
 	} 
 	
 	catch (OpenemsException e) {
-		log.error("Error while trying to stop system\n" + e.getMessage());
+		log.error("Error while trying to stop string 1\n" + e.getMessage());
 	}
+}
+private void stopBAT_2() {
+	IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
+
+
+try {
+	SET_START_STOP_2.setNextWriteValue(Stop);
+} 
+
+catch (OpenemsException e) {
+	log.error("Error while trying to stop string 2\n" + e.getMessage());
+}
 }
 
 
