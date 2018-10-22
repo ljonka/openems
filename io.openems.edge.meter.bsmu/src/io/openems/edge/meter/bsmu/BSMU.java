@@ -52,6 +52,8 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 	private String modbusBridgeId;
 	public int Start = 1;
 	public int Stop = 0;
+	private boolean END_CHARGE_1 = END_OF_CHARGE_1();
+	private boolean END_CHARGE_2 = END_OF_CHARGE_2();
 
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
 	protected void setBattery(Battery battery) {
@@ -93,57 +95,93 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 	protected ConfigurationAdmin cm;
 private void HandleBatteryState() {
 	
+	if((END_CHARGE_1 = true) && (END_CHARGE_2 = true)) {
+		stopBAT_1();
+		stopBAT_2();
+	}
+	else if((END_CHARGE_1 = true) && (END_CHARGE_2 = false)) {
+		stopBAT_1();
+	}
+	else if((END_CHARGE_2 = true) && (END_CHARGE_1 = false)) {
+		stopBAT_2();
+	}
+	else {
+		startBAT_1();
+		startBAT_2();
+	}
+	
+	
 	switch (this.batteryState) {
 	case OFF:
-		stopBSMU();
+		stopBAT_1();
+		stopBAT_2();
 		break;
 	case ON:
-		startBSMU();
+		startBAT_1();
+		startBAT_2();
 		break;
 	}
 }
 
-private void startBSMU() {
+private void startBAT_1() {
 	IntegerWriteChannel SET_START_STOP_1 = this.channel(ChannelId.SET_START_STOP_STRING_1);
-	IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
 
 	try {
 	SET_START_STOP_1.setNextWriteValue(Start);
+	} 
+
+	catch (OpenemsException e) {
+	log.error("Error while trying to start string 1\n" + e.getMessage());
+	}
+}
+private void startBAT_2() {
+	IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
+
+	try {
 	SET_START_STOP_2.setNextWriteValue(Start);
 	} 
 
 	catch (OpenemsException e) {
-	log.error("Error while trying to start system\n" + e.getMessage());
+	log.error("Error while trying to start string 2\n" + e.getMessage());
 	}
 }
 
-private void stopBSMU() {
+private void stopBAT_1() {
 		IntegerWriteChannel SET_START_STOP_1 = this.channel(ChannelId.SET_START_STOP_STRING_1);
-		IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
 
 	
 	try {
 		SET_START_STOP_1.setNextWriteValue(Stop);
-		SET_START_STOP_2.setNextWriteValue(Stop);
 	} 
 	
 	catch (OpenemsException e) {
-		log.error("Error while trying to stop system\n" + e.getMessage());
+		log.error("Error while trying to stop string 1\n" + e.getMessage());
+	}
+}
+private void stopBAT_2() {
+	IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
+
+
+	try {
+	SET_START_STOP_2.setNextWriteValue(Stop);
+	} 
+
+	catch (OpenemsException e) {
+	log.error("Error while trying to stop string 2\n" + e.getMessage());
 	}
 }
 
-public boolean End_of_Charge_1() {
+public boolean END_OF_CHARGE_1() {				// get End of Charge Value
 	StateChannel i = this.channel(ChannelId.END_OF_CHARGE_REQUEST_1);
-	Optional<Boolean> End = i.getNextValue().asOptional();
-	return End.isPresent() && End.get();
+	Optional<Boolean> END_CHARGE = i.getNextValue().asOptional();
+	return END_CHARGE.isPresent() && END_CHARGE.get();
 }
-public boolean End_of_Charge_2() {
+public boolean END_OF_CHARGE_2() {				// get End of Charge Value
 	StateChannel i = this.channel(ChannelId.END_OF_CHARGE_REQUEST_2);
-	Optional<Boolean> End = i.getNextValue().asOptional();
-	return End.isPresent() && End.get();
+	Optional<Boolean> END_CHARGE = i.getNextValue().asOptional();
+	return END_CHARGE.isPresent() && END_CHARGE.get();
 }
-private boolean EndCharge_1 = End_of_Charge_1();
-private boolean EndCharge_2 = End_of_Charge_2();
+
 
 public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 	
@@ -246,6 +284,54 @@ public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 	START_STOP_STRING_2(new Doc().unit(Unit.NONE)),
 	ALARMS_2(new Doc().unit(Unit.NONE)),
 	FAULTS_2(new Doc().unit(Unit.NONE)),
+	SERIAL_NUMBER(new Doc().unit(Unit.NONE)),
+	MODBUS_VERSION(new Doc().unit(Unit.NONE)),
+	BATTERY_TYP(new Doc().unit(Unit.NONE)),
+	BATTERY_MANUFACTURER(new Doc().unit(Unit.NONE)),
+	BATTERY_MODEL(new Doc().unit(Unit.NONE)),
+	STATE_OF_BATTERY_STACK(new Doc().unit(Unit.NONE)),
+	WARRANTY_DATE(new Doc().unit(Unit.NONE)),
+	INSTALLATION_DATE(new Doc().unit(Unit.NONE)),
+	NAMEPLATE_CHARGE_CAPACITY(new Doc().unit(Unit.AMPERE_HOURS)),
+	NAMEPLATE_ENERGY_CAPACITY(new Doc().unit(Unit.WATT_HOURS)),
+	NAMEPLATE_MAX_CHARGE_RATE(new Doc().unit(Unit.WATT)),
+	NAMEPLATE_MAX_DISCHARGE_RATE(new Doc().unit(Unit.WATT)),
+	MAX_BATTERY_VOLTAGE(new Doc().unit(Unit.VOLT)),
+	MIN_BATTERY_VOLTAGE(new Doc().unit(Unit.VOLT)),
+	MAX_CELL_VOLTAGE(new Doc().unit(Unit.VOLT)),
+	MAX_CELL_VOLTAGE_STRING(new Doc().unit(Unit.VOLT)),
+	MIN_CELL_VOLTAGE(new Doc().unit(Unit.VOLT)),
+	MIN_CELL_VOLTAGE_STRING(new Doc().unit(Unit.VOLT)),
+	TOTAL_CHARGE_ENERGY(new Doc().unit(Unit.WATT_HOURS)),
+	TOTAL_DISCHARGE_ENERGY(new Doc().unit(Unit.WATT_HOURS)),
+	CURRENT_TOTAL_CAPACITY(new Doc().unit(Unit.WATT_HOURS)),
+	REST_CAPACITY(new Doc().unit(Unit.WATT_HOURS)),
+	TOTAL_DC_CURRENT(new Doc().unit(Unit.AMPERE)),
+	TOTAL_DC_VOLTAGE(new Doc().unit(Unit.VOLT)),
+	MAX_CHARGE_CURRENT(new Doc().unit(Unit.AMPERE)),
+	MAX_DISCHARGE_CURRENT(new Doc().unit(Unit.AMPERE)),
+	TOTAL_POWER(new Doc().unit(Unit.WATT)),				// UNIT: KILOWATT
+	INVERTER_STATE_REQUEST(new Doc().unit(Unit.NONE)),
+	BATTERY_POWER_REQUEST(new Doc().unit(Unit.NONE)),
+	BATTERY_CHARGE_DISCHARGE_REQUEST(new Doc().unit(Unit.NONE)),
+	CONTROLE_MODE(new Doc().unit(Unit.NONE)),
+	START_STOP_BATTERY_STACK(new Doc().unit(Unit.NONE)),
+	STRING_COUNT(new Doc().unit(Unit.NONE)),
+	CONNECTED_STRING_COUNT(new Doc().unit(Unit.NONE)),
+	MAX_STRING_VOLTAGE(new Doc().unit(Unit.VOLT)),
+	MAX_STRING_VOLTAGE_STRING(new Doc().unit(Unit.VOLT)),
+	MIN_STRING_VOLTAGE(new Doc().unit(Unit.VOLT)),
+	MIN_STRING_VOLTAGE_STRING(new Doc().unit(Unit.VOLT)),
+	AVERAGE_STRING_VOLTAGE(new Doc().unit(Unit.VOLT)),
+	MAX_STRING_CURRENT(new Doc().unit(Unit.AMPERE)),
+	MAX_STRING_CURRENT_STRING(new Doc().unit(Unit.AMPERE)),
+	MIN_STRING_CURRENT(new Doc().unit(Unit.AMPERE)),
+	MIN_STRING_CURRENT_STRING(new Doc().unit(Unit.AMPERE)),
+	AVERAGE_STRING_CURRENT(new Doc().unit(Unit.AMPERE)),
+	ALARMS_STRING(new Doc().unit(Unit.NONE)),
+	FAULTS_STRING(new Doc().unit(Unit.NONE)),
+	SET_BATTERY_CHARGE_DISCHARGE_REQUEST(new Doc().unit(Unit.NONE)),
+	SET_START_STOP_BATTERY_STACK(new Doc().unit(Unit.NONE)),
 	
 	;
 	
@@ -464,7 +550,105 @@ protected ModbusProtocol defineModbusProtocol() {
 			new FC6WriteRegisterTask(0x261, //
 					m(BSMU.ChannelId.SET_ENABLE_STRING_2, new UnsignedWordElement(0x261))),
 			new FC6WriteRegisterTask(0x262, //
-					m(BSMU.ChannelId.SET_START_STOP_STRING_2, new UnsignedWordElement(0x262)))
+					m(BSMU.ChannelId.SET_START_STOP_STRING_2, new UnsignedWordElement(0x262))),
+//----------------------------------------READ STRING------------------------------------------------------------------			
+			new FC3ReadRegistersTask(0x500, Priority.LOW,
+					m(BSMU.ChannelId.SERIAL_NUMBER, new UnsignedWordElement(0x500))),
+			new FC3ReadRegistersTask(0x501, Priority.LOW,
+					m(BSMU.ChannelId.MODBUS_VERSION, new UnsignedWordElement(0x501))),
+			new FC3ReadRegistersTask(0x502, Priority.LOW,
+					m(BSMU.ChannelId.BATTERY_TYP, new UnsignedWordElement(0x502))),
+			new FC3ReadRegistersTask(0x503, Priority.LOW,
+					m(BSMU.ChannelId.BATTERY_MANUFACTURER, new UnsignedWordElement(0x503))),
+			new FC3ReadRegistersTask(0x504, Priority.LOW,
+					m(BSMU.ChannelId.BATTERY_MODEL, new UnsignedWordElement(0x504))),
+			new FC3ReadRegistersTask(0x505, Priority.HIGH,
+					m(BSMU.ChannelId.STATE_OF_BATTERY_STACK, new UnsignedWordElement(0x505))),
+			new FC3ReadRegistersTask(0x506, Priority.LOW,
+					m(BSMU.ChannelId.WARRANTY_DATE, new UnsignedWordElement(0x506))),
+			new FC3ReadRegistersTask(0x507, Priority.LOW,
+					m(BSMU.ChannelId.INSTALLATION_DATE, new UnsignedWordElement(0x507))),
+			new FC3ReadRegistersTask(0x508, Priority.HIGH,
+					m(BSMU.ChannelId.NAMEPLATE_CHARGE_CAPACITY, new UnsignedWordElement(0x508))),
+			new FC3ReadRegistersTask(0x509, Priority.HIGH,
+					m(BSMU.ChannelId.NAMEPLATE_ENERGY_CAPACITY, new UnsignedWordElement(0x509))),
+			new FC3ReadRegistersTask(0x510, Priority.HIGH,
+					m(BSMU.ChannelId.NAMEPLATE_MAX_CHARGE_RATE, new UnsignedWordElement(0x510))),
+			new FC3ReadRegistersTask(0x511, Priority.HIGH,
+					m(BSMU.ChannelId.NAMEPLATE_MAX_DISCHARGE_RATE, new UnsignedWordElement(0x511))),
+			new FC3ReadRegistersTask(0x512, Priority.HIGH,
+					m(BSMU.ChannelId.MAX_BATTERY_VOLTAGE, new UnsignedWordElement(0x512))),
+			new FC3ReadRegistersTask(0x513, Priority.HIGH,
+					m(BSMU.ChannelId.MIN_BATTERY_VOLTAGE, new UnsignedWordElement(0x513))),
+			new FC3ReadRegistersTask(0x514, Priority.HIGH,
+					m(BSMU.ChannelId.MAX_CELL_VOLTAGE, new UnsignedWordElement(0x514))),
+			new FC3ReadRegistersTask(0x515, Priority.HIGH,
+					m(BSMU.ChannelId.MAX_CELL_VOLTAGE_STRING, new UnsignedWordElement(0x515))),
+			new FC3ReadRegistersTask(0x516, Priority.HIGH,
+					m(BSMU.ChannelId.MIN_CELL_VOLTAGE, new UnsignedWordElement(0x516))),
+			new FC3ReadRegistersTask(0x517, Priority.HIGH,
+					m(BSMU.ChannelId.MIN_CELL_VOLTAGE_STRING, new UnsignedWordElement(0x517))),
+			new FC3ReadRegistersTask(0x518, Priority.HIGH,
+					m(BSMU.ChannelId.TOTAL_CHARGE_ENERGY, new UnsignedWordElement(0x518))),
+			new FC3ReadRegistersTask(0x519, Priority.HIGH,
+					m(BSMU.ChannelId.TOTAL_DISCHARGE_ENERGY, new UnsignedWordElement(0x519))),
+			new FC3ReadRegistersTask(0x520, Priority.HIGH,
+					m(BSMU.ChannelId.CURRENT_TOTAL_CAPACITY, new UnsignedWordElement(0x520))),
+			new FC3ReadRegistersTask(0x521, Priority.HIGH,
+					m(BSMU.ChannelId.REST_CAPACITY, new UnsignedWordElement(0x521))),
+			new FC3ReadRegistersTask(0x522, Priority.HIGH,
+					m(BSMU.ChannelId.TOTAL_DC_CURRENT, new UnsignedWordElement(0x522))),
+			new FC3ReadRegistersTask(0x523, Priority.HIGH,
+					m(BSMU.ChannelId.TOTAL_DC_VOLTAGE, new UnsignedWordElement(0x523))),
+			new FC3ReadRegistersTask(0x524, Priority.HIGH,
+					m(BSMU.ChannelId.MAX_CHARGE_CURRENT, new UnsignedWordElement(0x524))),
+			new FC3ReadRegistersTask(0x525, Priority.HIGH,
+					m(BSMU.ChannelId.MAX_DISCHARGE_CURRENT, new UnsignedWordElement(0x525))),
+			new FC3ReadRegistersTask(0x526, Priority.HIGH,
+					m(BSMU.ChannelId.TOTAL_POWER, new UnsignedWordElement(0x526))),
+			new FC3ReadRegistersTask(0x527, Priority.HIGH,
+					m(BSMU.ChannelId.INVERTER_STATE_REQUEST, new UnsignedWordElement(0x527))),
+			new FC3ReadRegistersTask(0x528, Priority.HIGH,
+					m(BSMU.ChannelId.BATTERY_POWER_REQUEST, new UnsignedWordElement(0x528))),
+			new FC3ReadRegistersTask(0x529, Priority.HIGH,
+					m(BSMU.ChannelId.BATTERY_CHARGE_DISCHARGE_REQUEST, new UnsignedWordElement(0x529))),
+			new FC3ReadRegistersTask(0x530, Priority.LOW,
+					m(BSMU.ChannelId.CONTROLE_MODE, new UnsignedWordElement(0x530))),
+			new FC3ReadRegistersTask(0x531, Priority.HIGH,
+					m(BSMU.ChannelId.START_STOP_BATTERY_STACK, new UnsignedWordElement(0x531))),
+			new FC3ReadRegistersTask(0x532, Priority.HIGH,
+					m(BSMU.ChannelId.STRING_COUNT, new UnsignedWordElement(0x532))),
+			new FC3ReadRegistersTask(0x533, Priority.LOW,
+					m(BSMU.ChannelId.CONNECTED_STRING_COUNT, new UnsignedWordElement(0x533))),
+			new FC3ReadRegistersTask(0x534, Priority.HIGH,
+					m(BSMU.ChannelId.MAX_STRING_VOLTAGE, new UnsignedWordElement(0x534))),
+			new FC3ReadRegistersTask(0x535, Priority.HIGH,
+					m(BSMU.ChannelId.MAX_STRING_VOLTAGE_STRING, new UnsignedWordElement(0x535))),
+			new FC3ReadRegistersTask(0x536, Priority.HIGH,
+					m(BSMU.ChannelId.MIN_STRING_VOLTAGE, new UnsignedWordElement(0x536))),
+			new FC3ReadRegistersTask(0x537, Priority.HIGH,
+					m(BSMU.ChannelId.MIN_STRING_VOLTAGE_STRING, new UnsignedWordElement(0x537))),
+			new FC3ReadRegistersTask(0x538, Priority.HIGH,
+					m(BSMU.ChannelId.AVERAGE_STRING_VOLTAGE, new UnsignedWordElement(0x538))),
+			new FC3ReadRegistersTask(0x539, Priority.HIGH,
+					m(BSMU.ChannelId.MAX_STRING_CURRENT, new UnsignedWordElement(0x539))),
+			new FC3ReadRegistersTask(0x540, Priority.HIGH,
+					m(BSMU.ChannelId.MAX_STRING_CURRENT_STRING, new UnsignedWordElement(0x540))),
+			new FC3ReadRegistersTask(0x541, Priority.HIGH,
+					m(BSMU.ChannelId.MIN_STRING_CURRENT, new UnsignedWordElement(0x541))),
+			new FC3ReadRegistersTask(0x542, Priority.HIGH,
+					m(BSMU.ChannelId.MIN_STRING_CURRENT_STRING, new UnsignedWordElement(0x542))),
+			new FC3ReadRegistersTask(0x543, Priority.HIGH,
+					m(BSMU.ChannelId.AVERAGE_STRING_CURRENT, new UnsignedWordElement(0x543))),
+			new FC3ReadRegistersTask(0x544, Priority.HIGH,
+					m(BSMU.ChannelId.ALARMS_STRING, new UnsignedWordElement(0x544))),
+			new FC3ReadRegistersTask(0x545, Priority.HIGH,
+					m(BSMU.ChannelId.FAULTS_STRING, new UnsignedWordElement(0x545))),
+//-----------------------------------------------WRITE STRING----------------------------------------------------
+			new FC6WriteRegisterTask(0x529,
+					m(BSMU.ChannelId.SET_BATTERY_CHARGE_DISCHARGE_REQUEST, new UnsignedWordElement(0x529))),
+			new FC6WriteRegisterTask(0x531,
+					m(BSMU.ChannelId.SET_START_STOP_BATTERY_STACK, new UnsignedWordElement(0x531)))
 			
 			
 			);

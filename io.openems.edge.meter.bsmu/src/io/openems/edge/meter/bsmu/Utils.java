@@ -38,7 +38,9 @@ public class Utils {
 					case SET_ENABLE_STRING_1:
 					case SET_ENABLE_STRING_2:
 					case SET_START_STOP_STRING_2:
-					case SET_START_STOP_STRING_1:		
+					case SET_START_STOP_STRING_1:	
+					case SET_BATTERY_CHARGE_DISCHARGE_REQUEST:
+					case SET_START_STOP_BATTERY_STACK:
 						
 						return new IntegerWriteChannel(ess, channelId);
 					case USER_SOC_1:
@@ -129,7 +131,58 @@ public class Utils {
 					case WAKE_UP_TYPE_2:
 					case LBC_PRUN_KEY_2:
 					case SAFETY_MODE_1_FLAG_RCY_1:
+					case ALARMS_STRING:
+					case AVERAGE_STRING_CURRENT:
+					case AVERAGE_STRING_VOLTAGE:
+					case BATTERY_CHARGE_DISCHARGE_REQUEST:
+					case BATTERY_MANUFACTURER:
+					case BATTERY_MODEL:
+					case BATTERY_POWER_REQUEST:
+					case BATTERY_TYP:
+					case CONNECTED_STRING_COUNT:
+					case CONTROLE_MODE:
+					case CURRENT_TOTAL_CAPACITY:
+					case ENABLE_STRING_1:
+					case ENABLE_STRING_2:
+					case FAULTS_STRING:
+					case INSTALLATION_DATE:
+					case INVERTER_STATE_REQUEST:
+					case MAX_BATTERY_VOLTAGE:
+					case MAX_CELL_VOLTAGE:
+					case MAX_CELL_VOLTAGE_STRING:
+					case MAX_CHARGE_CURRENT:
+					case MAX_DISCHARGE_CURRENT:
+					case MAX_STRING_CURRENT:
+					case MAX_STRING_CURRENT_STRING:
+					case MAX_STRING_VOLTAGE:
+					case MAX_STRING_VOLTAGE_STRING:
+					case MIN_BATTERY_VOLTAGE:
+					case MIN_CELL_VOLTAGE:
+					case MIN_CELL_VOLTAGE_STRING:
+					case MIN_STRING_CURRENT:
+					case MIN_STRING_CURRENT_STRING:
+					case MIN_STRING_VOLTAGE:
+					case MIN_STRING_VOLTAGE_STRING:
+					case MODBUS_VERSION:
+					case NAMEPLATE_CHARGE_CAPACITY:
+					case NAMEPLATE_ENERGY_CAPACITY:
+					case NAMEPLATE_MAX_CHARGE_RATE:
+					case NAMEPLATE_MAX_DISCHARGE_RATE:
+					case REST_CAPACITY:
+					case SERIAL_NUMBER:
+					case START_STOP_BATTERY_STACK:
+					case START_STOP_STRING_1:
+					case START_STOP_STRING_2:
+					case STATE_OF_BATTERY_STACK:
+					case STRING_COUNT:
+					case TOTAL_CHARGE_ENERGY:
+					case TOTAL_DC_CURRENT:
+					case TOTAL_DC_VOLTAGE:
+					case TOTAL_DISCHARGE_ENERGY:
+					case TOTAL_POWER:
+					case WARRANTY_DATE:
 						return new IntegerReadChannel(ess, channelId);
+					
 					}
 					return null;
 				}) //

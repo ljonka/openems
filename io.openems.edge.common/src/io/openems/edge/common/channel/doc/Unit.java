@@ -73,7 +73,13 @@ public enum Unit {
 	 * Unit of Voltage [mV]
 	 */
 	MILLIVOLT("mV", VOLT, -3),
-	
+	/*
+	 * Load
+	 */
+	/**
+	 * Unit of Load
+	 */
+	AMPERE_HOURS("Ah"),
 	/*
 	 * Current
 	 */
