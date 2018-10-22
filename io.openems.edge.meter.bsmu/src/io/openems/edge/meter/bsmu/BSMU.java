@@ -54,6 +54,8 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 	public int Stop = 0;
 	private boolean END_CHARGE_1 = END_OF_CHARGE_1();
 	private boolean END_CHARGE_2 = END_OF_CHARGE_2();
+	private boolean ACK_1;
+	private boolean ACK_2;
 
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
 	protected void setBattery(Battery battery) {
@@ -82,7 +84,22 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 		this.channel(ChannelId.HV_BAT_HEALTH_2).onChange(value -> { this.channel(Battery.ChannelId.SOH_2).setNextValue(value); });
 		this.channel(ChannelId.HV_BAT_TEMP_1).onChange(value -> { this.channel(Battery.ChannelId.BATTERY_TEMP).setNextValue(value); });
 		this.channel(ChannelId.HV_BAT_TEMP_2).onChange(value -> { this.channel(Battery.ChannelId.BATTERY_TEMP_2).setNextValue(value); });
-		
+		this.channel(ChannelId.CELL_HIGHEST_VOLTAGE_1).onChange(value -> { this.channel(Battery.ChannelId.HIGHEST_CELL_VOLTAGE_1).setNextValue(value); });
+		this.channel(ChannelId.CELL_HIGHEST_VOLTAGE_2).onChange(value -> { this.channel(Battery.ChannelId.HIGHEST_CELL_VOLTAGE_2).setNextValue(value); });
+		this.channel(ChannelId.CELL_LOWEST_VOLTAGE_1).onChange(value -> { this.channel(Battery.ChannelId.LOWEST_CELL_VOLTAGE_1).setNextValue(value); });
+		this.channel(ChannelId.CELL_LOWEST_VOLTAGE_2).onChange(value -> { this.channel(Battery.ChannelId.LOWEST_CELL_VOLTAGE_2).setNextValue(value); });
+		this.channel(ChannelId.MAX_CELL_VOLTAGE).onChange(value -> { this.channel(Battery.ChannelId.HIGHEST_CELL_VOLTAGE_STACK).setNextValue(value); });
+		this.channel(ChannelId.MIN_CELL_VOLTAGE).onChange(value -> { this.channel(Battery.ChannelId.LOWEST_CELL_VOLTAGE_STACK).setNextValue(value); });
+		this.channel(ChannelId.MAX_STRING_VOLTAGE).onChange(value -> { this.channel(Battery.ChannelId.MAX_STRING_VOLTAGE).setNextValue(value); });
+		this.channel(ChannelId.MIN_STRING_VOLTAGE).onChange(value -> { this.channel(Battery.ChannelId.MIN_STRING_VOLTAGE).setNextValue(value); });
+		this.channel(ChannelId.OPERATING_TYPE_1).onChange(value -> { this.channel(Battery.ChannelId.OPERATING_STATE_1).setNextValue(value); });
+		this.channel(ChannelId.OPERATING_TYPE_2).onChange(value -> { this.channel(Battery.ChannelId.OPERATING_STATE_2).setNextValue(value); });
+		this.channel(ChannelId.ALARMS_1).onChange(value -> { this.channel(Battery.ChannelId.ALARMS_1).setNextValue(value); });
+		this.channel(ChannelId.ALARMS_2).onChange(value -> { this.channel(Battery.ChannelId.ALARMS_2).setNextValue(value); });
+		this.channel(ChannelId.FAULTS_1).onChange(value -> { this.channel(Battery.ChannelId.FAULTS_1).setNextValue(value); });
+		this.channel(ChannelId.FAULTS_2).onChange(value -> { this.channel(Battery.ChannelId.FAULTS_2).setNextValue(value); });
+
+
 	}																														
 
 	@Deactivate
@@ -95,79 +112,88 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 	protected ConfigurationAdmin cm;
 private void HandleBatteryState() {
 	
-	if((END_CHARGE_1 = true) && (END_CHARGE_2 = true)) {
-		stopBAT_1();
-		stopBAT_2();
-	}
-	else if((END_CHARGE_1 = true) && (END_CHARGE_2 = false)) {
-		stopBAT_1();
-	}
-	else if((END_CHARGE_2 = true) && (END_CHARGE_1 = false)) {
-		stopBAT_2();
-	}
-	else {
-		startBAT_1();
-		startBAT_2();
-	}
+
 	
 	
 	switch (this.batteryState) {
 	case OFF:
-		stopBAT_1();
-		stopBAT_2();
+		stopString_1();
+		stopString_2();
 		break;
 	case ON:
-		startBAT_1();
-		startBAT_2();
+		startString_1();
+		startString_2();
 		break;
 	}
 }
 
-private void startBAT_1() {
+private void startString_1() {
 	IntegerWriteChannel SET_START_STOP_1 = this.channel(ChannelId.SET_START_STOP_STRING_1);
-
+	ACK_1 = true;
 	try {
 	SET_START_STOP_1.setNextWriteValue(Start);
 	} 
 
 	catch (OpenemsException e) {
-	log.error("Error while trying to start string 1\n" + e.getMessage());
+	log.error("Error while trying to start battery 1\n" + e.getMessage());
 	}
+	
 }
-private void startBAT_2() {
+private void startString_2() {
 	IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
-
+	ACK_2 = true;
 	try {
 	SET_START_STOP_2.setNextWriteValue(Start);
 	} 
 
 	catch (OpenemsException e) {
-	log.error("Error while trying to start string 2\n" + e.getMessage());
+	log.error("Error while trying to start battery 2\n" + e.getMessage());
 	}
 }
 
-private void stopBAT_1() {
+private void stopString_1() {
 		IntegerWriteChannel SET_START_STOP_1 = this.channel(ChannelId.SET_START_STOP_STRING_1);
-
-	
+		ACK_1 = false;
 	try {
 		SET_START_STOP_1.setNextWriteValue(Stop);
 	} 
 	
 	catch (OpenemsException e) {
-		log.error("Error while trying to stop string 1\n" + e.getMessage());
+		log.error("Error while trying to stop battery 1\n" + e.getMessage());
 	}
 }
-private void stopBAT_2() {
+private void stopString_2() {
 	IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
-
-
+	ACK_2 = false;
 	try {
 	SET_START_STOP_2.setNextWriteValue(Stop);
 	} 
 
 	catch (OpenemsException e) {
-	log.error("Error while trying to stop string 2\n" + e.getMessage());
+	log.error("Error while trying to stop battery 2\n" + e.getMessage());
+	}
+}
+
+private void startStack() {
+	IntegerWriteChannel SET_START_STOP_STACK = this.channel(ChannelId.SET_START_STOP_BATTERY_STACK);
+	
+	try {
+	SET_START_STOP_STACK.setNextWriteValue(Start);
+	} 
+
+	catch (OpenemsException e) {
+	log.error("Error while trying to start stack\n" + e.getMessage());
+	}
+}
+private void stopStack() {
+	IntegerWriteChannel SET_START_STOP_STACK = this.channel(ChannelId.SET_START_STOP_BATTERY_STACK);
+	
+	try {
+	SET_START_STOP_STACK.setNextWriteValue(Stop);
+	} 
+
+	catch (OpenemsException e) {
+	log.error("Error while trying to stop stack\n" + e.getMessage());
 	}
 }
 
@@ -298,10 +324,10 @@ public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 	NAMEPLATE_MAX_DISCHARGE_RATE(new Doc().unit(Unit.WATT)),
 	MAX_BATTERY_VOLTAGE(new Doc().unit(Unit.VOLT)),
 	MIN_BATTERY_VOLTAGE(new Doc().unit(Unit.VOLT)),
-	MAX_CELL_VOLTAGE(new Doc().unit(Unit.VOLT)),
-	MAX_CELL_VOLTAGE_STRING(new Doc().unit(Unit.VOLT)),
-	MIN_CELL_VOLTAGE(new Doc().unit(Unit.VOLT)),
-	MIN_CELL_VOLTAGE_STRING(new Doc().unit(Unit.VOLT)),
+	MAX_CELL_VOLTAGE(new Doc().unit(Unit.MILLIVOLT)),
+	MAX_CELL_VOLTAGE_STRING(new Doc().unit(Unit.NONE)),
+	MIN_CELL_VOLTAGE(new Doc().unit(Unit.MILLIVOLT)),
+	MIN_CELL_VOLTAGE_STRING(new Doc().unit(Unit.NONE)),
 	TOTAL_CHARGE_ENERGY(new Doc().unit(Unit.WATT_HOURS)),
 	TOTAL_DISCHARGE_ENERGY(new Doc().unit(Unit.WATT_HOURS)),
 	CURRENT_TOTAL_CAPACITY(new Doc().unit(Unit.WATT_HOURS)),
@@ -662,7 +688,28 @@ public void handleEvent(Event event) {
 	switch (event.getTopic()) {
 
 	case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-		HandleBatteryState();			
+		HandleBatteryState();
+		if((END_CHARGE_1 = true) && (END_CHARGE_2 = true)) {
+			stopString_1();
+			stopString_2();
+		}
+		else if((END_CHARGE_1 = true) && (END_CHARGE_2 = false)) {
+			stopString_1();
+		}
+		else if((END_CHARGE_2 = true) && (END_CHARGE_1 = false)) {
+			stopString_2();
+		}
+		else {
+			startString_1();
+			startString_2();
+		}
+		
+		if((ACK_1 = true) && (ACK_2 = true)) {
+			startStack();
+		}
+		else {
+			stopStack();
+		}
 		break;
 	}
 }

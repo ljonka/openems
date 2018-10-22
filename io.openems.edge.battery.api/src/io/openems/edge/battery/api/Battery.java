@@ -139,6 +139,130 @@ public interface Battery extends OpenemsComponent {
 		READY_FOR_WORKING(new Doc().type(OpenemsType.BOOLEAN)),
 		
 		/**
+		 * Indicates the faults of battery 2
+		 * 
+		 * <ul>
+		 * <li>Interface: Battery
+		 * <li>Type: Integer
+		 * </ul>
+		 */
+		FAULTS_2(new Doc().type(OpenemsType.INTEGER)),
+		
+		/**
+		 * Indicates the faults of battery 1
+		 * 
+		 * <ul>
+		 * <li>Interface: Battery
+		 * <li>Type: Integer
+		 * </ul>
+		 */
+		FAULTS_1(new Doc().type(OpenemsType.INTEGER)),
+		
+		/**
+		 * Indicates the alarms of battery 2
+		 * 
+		 * <ul>
+		 * <li>Interface: Battery
+		 * <li>Type: Integer
+		 * </ul>
+		 */
+		ALARMS_2(new Doc().type(OpenemsType.INTEGER)),
+		
+		/**
+		 * Indicates the alarms of battery 1
+		 * 
+		 * <ul>
+		 * <li>Interface: Battery
+		 * <li>Type: Integer
+		 * </ul>
+		 */
+		ALARMS_1(new Doc().type(OpenemsType.INTEGER)),
+		
+		/**
+		 * Indicates the operating state of battery 1
+		 * 
+		 * <ul>
+		 * <li>Interface: Battery
+		 * <li>Type: Integer
+		 * </ul>
+		 */
+		OPERATING_STATE_1(new Doc().type(OpenemsType.INTEGER)),
+		
+		/**
+		 * Indicates the operating state of battery 2
+		 * 
+		 * <ul>
+		 * <li>Interface: Battery
+		 * <li>Type: Integer
+		 * </ul>
+		 */
+		OPERATING_STATE_2(new Doc().type(OpenemsType.INTEGER)),
+		
+		/**
+		 * Highest Voltage of Battery stack
+		 * <ul>
+		 * <li>Interface: Battery
+		 * </ul>
+		 */
+		MAX_STRING_VOLTAGE(new Doc().type(OpenemsType.INTEGER).unit(Unit.VOLT)),
+		
+		/**
+		 * Highest Voltage of Battery stack
+		 * <ul>
+		 * <li>Interface: Battery
+		 * </ul>
+		 */
+		MIN_STRING_VOLTAGE(new Doc().type(OpenemsType.INTEGER).unit(Unit.VOLT)),
+		
+		/**
+		 * Highest Cell Voltage of Battery 1
+		 * <ul>
+		 * <li>Interface: Battery
+		 * </ul>
+		 */
+		HIGHEST_CELL_VOLTAGE_1(new Doc().type(OpenemsType.INTEGER).unit(Unit.MILLIVOLT)),
+
+		/**
+		 * Highest Cell Voltage of Battery 2
+		 * <ul>
+		 * <li>Interface: Battery
+		 * </ul>
+		 */
+		HIGHEST_CELL_VOLTAGE_2(new Doc().type(OpenemsType.INTEGER).unit(Unit.MILLIVOLT)),
+		
+		/**
+		 * Lowest Cell Voltage of Battery 1
+		 * <ul>
+		 * <li>Interface: Battery
+		 * </ul>
+		 */
+		LOWEST_CELL_VOLTAGE_1(new Doc().type(OpenemsType.INTEGER).unit(Unit.MILLIVOLT)),
+
+		/**
+		 * Lowest Cell Voltage of Battery 2
+		 * <ul>
+		 * <li>Interface: Battery
+		 * </ul>
+		 */
+		LOWEST_CELL_VOLTAGE_2(new Doc().type(OpenemsType.INTEGER).unit(Unit.MILLIVOLT)),
+		
+		/**
+		 * Lowest Cell Voltage of Battery stack
+		 * <ul>
+		 * <li>Interface: Battery
+		 * </ul>
+		 */
+		LOWEST_CELL_VOLTAGE_STACK(new Doc().type(OpenemsType.INTEGER).unit(Unit.MILLIVOLT)),
+		
+		/**
+		 * Highest Cell Voltage of Battery stack
+		 * <ul>
+		 * <li>Interface: Battery
+		 * </ul>
+		 */
+		HIGHEST_CELL_VOLTAGE_STACK(new Doc().type(OpenemsType.INTEGER).unit(Unit.MILLIVOLT)),
+		
+		/**
 		 * Capacity of battery
 		 * 
 		 * <ul>
@@ -261,6 +385,132 @@ public interface Battery extends OpenemsComponent {
 	 */
 	default Channel<Boolean> getReadyForWorking() {
 		return this.channel(ChannelId.READY_FOR_WORKING);
+	}
+	
+	/**
+	 * Gets the indicator about alarms of battery 1
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getAlarms_1() {
+		return this.channel(ChannelId.ALARMS_1);
+	}
+	
+	/**
+	 * Gets the indicator about alarms of battery 2
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getAlarms_2() {
+		return this.channel(ChannelId.ALARMS_2);
+	}
+	
+	/**
+	 * Gets the indicator about faults of battery 1
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getFaults_1() {
+		return this.channel(ChannelId.FAULTS_1);
+	}
+	
+	/**
+	 * Gets the indicator about faults of battery 2
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getFaults_2() {
+		return this.channel(ChannelId.FAULTS_2);
+	}
+	
+	/**
+	 * Gets the indicator about operating state of battery 1
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getOperatingState_1() {
+		return this.channel(ChannelId.OPERATING_STATE_1);
+	}
+	
+	/**
+	 * Gets the indicator about operating state of battery 2
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getOperatingState_2() {
+		return this.channel(ChannelId.OPERATING_STATE_2);
+	}
+	
+	/**
+	 * Gets the highest voltage of battery stack
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getMaxStringVoltage() {
+		return this.channel(ChannelId.MAX_STRING_VOLTAGE);
+	}
+	
+	/**
+	 * Gets the lowest voltage of battery stack
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getMinStringVoltage() {
+		return this.channel(ChannelId.MIN_STRING_VOLTAGE);
+	}
+	
+	/**
+	 * Gets the highest cell voltage of battery stack
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getHighestCellVoltage_STACK() {
+		return this.channel(ChannelId.HIGHEST_CELL_VOLTAGE_STACK);
+	}
+	
+	/**
+	 * Gets the highest cell voltage of battery stack
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getLOWESTCellVoltage_STACK() {
+		return this.channel(ChannelId.LOWEST_CELL_VOLTAGE_STACK);
+	}
+	
+	/**
+	 * Gets the highest cell voltage of battery 1
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getHighestCellVoltage_1() {
+		return this.channel(ChannelId.HIGHEST_CELL_VOLTAGE_1);
+	}
+	
+	/**
+	 * Gets the highest cell voltage of battery 2
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getHighestCellVoltage_2() {
+		return this.channel(ChannelId.HIGHEST_CELL_VOLTAGE_2);
+	}
+	
+	/**
+	 * Gets the lowest cell voltage of battery 1
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getLowestCellVoltage_1() {
+		return this.channel(ChannelId.LOWEST_CELL_VOLTAGE_1);
+	}
+	
+	/**
+	 * Gets the lowest cell voltage of battery 2
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getLowestCellVoltage_2() {
+		return this.channel(ChannelId.LOWEST_CELL_VOLTAGE_2);
 	}
 	
 	/**
