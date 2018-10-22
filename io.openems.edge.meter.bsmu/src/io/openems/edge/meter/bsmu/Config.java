@@ -5,7 +5,7 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
 
 @ObjectClassDefinition( 
-		name = "BSMU", //
+		name = "Meter BSMU", //
 		description = "Implements the Battery Stack Management Unit.")
 @interface Config {
 	String service_pid(); 
@@ -32,6 +32,6 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	@AttributeDefinition(name = "Maximum Ever Active Power", description = "This is automatically updated.")
 	int maxActivePower(); 
 
-	String webconsole_configurationFactory_nameHint() default "Battery Stack Management Unint [{id}]"; 
+	String webconsole_configurationFactory_nameHint() default "Battery Stack Management Unit [{id}]"; 
 }
 

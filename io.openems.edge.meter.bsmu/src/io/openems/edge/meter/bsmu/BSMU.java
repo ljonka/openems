@@ -330,6 +330,7 @@ public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 	AVERAGE_STRING_CURRENT(new Doc().unit(Unit.AMPERE)),
 	ALARMS_STRING(new Doc().unit(Unit.NONE)),
 	FAULTS_STRING(new Doc().unit(Unit.NONE)),
+	SET_BATTERY_POWER_REQUEST(new Doc().unit(Unit.NONE)),
 	SET_BATTERY_CHARGE_DISCHARGE_REQUEST(new Doc().unit(Unit.NONE)),
 	SET_START_STOP_BATTERY_STACK(new Doc().unit(Unit.NONE)),
 	
@@ -645,6 +646,8 @@ protected ModbusProtocol defineModbusProtocol() {
 			new FC3ReadRegistersTask(0x545, Priority.HIGH,
 					m(BSMU.ChannelId.FAULTS_STRING, new UnsignedWordElement(0x545))),
 //-----------------------------------------------WRITE STRING----------------------------------------------------
+			new FC6WriteRegisterTask(0x528,
+					m(BSMU.ChannelId.SET_BATTERY_POWER_REQUEST, new UnsignedWordElement(0x528))),
 			new FC6WriteRegisterTask(0x529,
 					m(BSMU.ChannelId.SET_BATTERY_CHARGE_DISCHARGE_REQUEST, new UnsignedWordElement(0x529))),
 			new FC6WriteRegisterTask(0x531,

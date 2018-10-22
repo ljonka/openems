@@ -41,6 +41,7 @@ public class Utils {
 					case SET_START_STOP_STRING_1:	
 					case SET_BATTERY_CHARGE_DISCHARGE_REQUEST:
 					case SET_START_STOP_BATTERY_STACK:
+					case SET_BATTERY_POWER_REQUEST:
 						
 						return new IntegerWriteChannel(ess, channelId);
 					case USER_SOC_1:
