@@ -23,6 +23,7 @@ import io.openems.edge.battery.api.Battery;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
+import io.openems.edge.bridge.modbus.api.element.SignedWordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
@@ -48,14 +49,21 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 	public static final int DEFAULT_UNIT_ID = 5;
 	
 	private BatteryState batteryState;
-	private Battery battery;
-	private String modbusBridgeId;
+	private BatteryMode batteryMode;
+	public Battery battery;
+	public String modbusBridgeId;
 	public int Start = 1;
 	public int Stop = 0;
-	private boolean END_CHARGE_1 = END_OF_CHARGE_1();
-	private boolean END_CHARGE_2 = END_OF_CHARGE_2();
-	private boolean ACK_1;
-	private boolean ACK_2;
+	public boolean END_CHARGE_1 = END_OF_CHARGE_1();
+	public boolean END_CHARGE_2 = END_OF_CHARGE_2();
+	public boolean END_DISCHARGE_1 = END_OF_DISCHARGE_1();
+	public boolean END_DISCHARGE_2 = END_OF_DISCHARGE_2();
+	public boolean STRING_STATUS_1 = StringState_1();
+	public boolean STRING_STATUS_2 = StringState_2();
+	private int watchdogInterval = 0;
+	public int CHARGE = 0;
+	public int DISCHARGE = 1;
+	
 
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
 	protected void setBattery(Battery battery) {
@@ -77,6 +85,7 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 				config.modbus_id());
 		this.modbusBridgeId = config.modbus_id();
 		this.batteryState = config.batteryState();
+		watchdogInterval = config.watchdoginterval();
 		
 		this.channel(ChannelId.USER_SOC_1).onChange(value -> { this.channel(Battery.ChannelId.SOC).setNextValue(value); });	// USER_SOC wird in Battery.SOC übergeben.
 		this.channel(ChannelId.USER_SOC_2).onChange(value -> { this.channel(Battery.ChannelId.SOC_2).setNextValue(value); });	// Im Sinexcel muss Battery aufgerufen werden.
@@ -92,8 +101,8 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 		this.channel(ChannelId.MIN_CELL_VOLTAGE).onChange(value -> { this.channel(Battery.ChannelId.LOWEST_CELL_VOLTAGE_STACK).setNextValue(value); });
 		this.channel(ChannelId.MAX_STRING_VOLTAGE).onChange(value -> { this.channel(Battery.ChannelId.MAX_STRING_VOLTAGE).setNextValue(value); });
 		this.channel(ChannelId.MIN_STRING_VOLTAGE).onChange(value -> { this.channel(Battery.ChannelId.MIN_STRING_VOLTAGE).setNextValue(value); });
-		this.channel(ChannelId.OPERATING_TYPE_1).onChange(value -> { this.channel(Battery.ChannelId.OPERATING_STATE_1).setNextValue(value); });
-		this.channel(ChannelId.OPERATING_TYPE_2).onChange(value -> { this.channel(Battery.ChannelId.OPERATING_STATE_2).setNextValue(value); });
+//		this.channel(ChannelId.OPERATING_TYPE_1).onChange(value -> { this.channel(Battery.ChannelId.OPERATING_STATE_1).setNextValue(value); });
+//		this.channel(ChannelId.OPERATING_TYPE_2).onChange(value -> { this.channel(Battery.ChannelId.OPERATING_STATE_2).setNextValue(value); });
 		this.channel(ChannelId.ALARMS_1).onChange(value -> { this.channel(Battery.ChannelId.ALARMS_1).setNextValue(value); });
 		this.channel(ChannelId.ALARMS_2).onChange(value -> { this.channel(Battery.ChannelId.ALARMS_2).setNextValue(value); });
 		this.channel(ChannelId.FAULTS_1).onChange(value -> { this.channel(Battery.ChannelId.FAULTS_1).setNextValue(value); });
@@ -111,25 +120,67 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 	@Reference
 	protected ConfigurationAdmin cm;
 private void HandleBatteryState() {
-	
-
-	
-	
+	setWatchdog();
 	switch (this.batteryState) {
 	case OFF:
-		stopString_1();
-		stopString_2();
+//		stopString_1();
+//		stopString_2();
+		stopStack();
 		break;
 	case ON:
-		startString_1();
-		startString_2();
+//		startString_1();
+//		startString_2();
+		startStack();
+		Monitoring();
 		break;
 	}
 }
 
+private void HandleBatteryMode() {
+	switch (this.batteryMode) {
+	case STANDBY:
+		
+		break;
+	case CHARGE:
+		ChargeReq();
+		break;
+	case DISCHARGE:
+		DischargeReq();
+		break;
+	}
+}
+
+private void setWatchdog() {
+	IntegerWriteChannel watchdogChannel = this.channel(ChannelId.WATCHDOG);
+	try {
+		watchdogChannel.setNextWriteValue(watchdogInterval);
+	} catch (OpenemsException e) {
+		log.error("Watchdog timer could not be written!" + e.getMessage());
+	}
+}
+
+private void Monitoring() {
+	if(((END_CHARGE_1 = true) && (END_CHARGE_2 = true)) || ((END_DISCHARGE_1 = true) && (END_DISCHARGE_2 = true))) {
+		stopString_1();
+		stopString_2();
+		stopStack();
+	}
+	else if(((END_CHARGE_1 = true) && (END_CHARGE_2 = false)) || ((END_DISCHARGE_1 = true) && (END_DISCHARGE_2 = false))) {
+		stopString_1();
+	}
+	else if(((END_CHARGE_1 = false) && (END_CHARGE_2 = true)) || ((END_DISCHARGE_1 = false) && (END_DISCHARGE_2 = true))) {
+		stopString_2();
+	}
+	else {
+		startString_1();
+		startString_2();
+		startStack();
+	}
+
+}
+
 private void startString_1() {
 	IntegerWriteChannel SET_START_STOP_1 = this.channel(ChannelId.SET_START_STOP_STRING_1);
-	ACK_1 = true;
 	try {
 	SET_START_STOP_1.setNextWriteValue(Start);
 	} 
@@ -141,7 +192,6 @@ private void startString_1() {
 }
 private void startString_2() {
 	IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
-	ACK_2 = true;
 	try {
 	SET_START_STOP_2.setNextWriteValue(Start);
 	} 
@@ -153,7 +203,6 @@ private void startString_2() {
 
 private void stopString_1() {
 		IntegerWriteChannel SET_START_STOP_1 = this.channel(ChannelId.SET_START_STOP_STRING_1);
-		ACK_1 = false;
 	try {
 		SET_START_STOP_1.setNextWriteValue(Stop);
 	} 
@@ -164,7 +213,6 @@ private void stopString_1() {
 }
 private void stopString_2() {
 	IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
-	ACK_2 = false;
 	try {
 	SET_START_STOP_2.setNextWriteValue(Stop);
 	} 
@@ -197,17 +245,61 @@ private void stopStack() {
 	}
 }
 
-public boolean END_OF_CHARGE_1() {				// get End of Charge Value
+public void ChargeReq() {
+IntegerWriteChannel SET_CHARGE_REQ = this.channel(ChannelId.SET_BATTERY_CHARGE_DISCHARGE_REQUEST);
+	
+	try {
+	SET_CHARGE_REQ.setNextWriteValue(CHARGE);
+	} 
+
+	catch (OpenemsException e) {
+	log.error("Error while trying to set the charge command\n" + e.getMessage());
+	}
+}
+public void DischargeReq() {
+IntegerWriteChannel SET_DISCHARGE_REQ = this.channel(ChannelId.SET_BATTERY_CHARGE_DISCHARGE_REQUEST);
+	
+	try {
+	SET_DISCHARGE_REQ.setNextWriteValue(DISCHARGE);
+	} 
+
+	catch (OpenemsException e) {
+	log.error("Error while trying to set the discharge command\n" + e.getMessage());
+	}
+}
+
+public boolean END_OF_CHARGE_1() {				// get End of charge flag of string 1
 	StateChannel i = this.channel(ChannelId.END_OF_CHARGE_REQUEST_1);
 	Optional<Boolean> END_CHARGE = i.getNextValue().asOptional();
 	return END_CHARGE.isPresent() && END_CHARGE.get();
 }
-public boolean END_OF_CHARGE_2() {				// get End of Charge Value
+public boolean END_OF_CHARGE_2() {				// get End of charge flag of string 2
 	StateChannel i = this.channel(ChannelId.END_OF_CHARGE_REQUEST_2);
 	Optional<Boolean> END_CHARGE = i.getNextValue().asOptional();
 	return END_CHARGE.isPresent() && END_CHARGE.get();
 }
 
+public boolean END_OF_DISCHARGE_1() {				// get End of Discharge flag of string 1
+	StateChannel i = this.channel(ChannelId.END_OF_CHARGE_REQUEST_1);
+	Optional<Boolean> END_CHARGE = i.getNextValue().asOptional();
+	return END_CHARGE.isPresent() && END_CHARGE.get();
+}
+public boolean END_OF_DISCHARGE_2() {				// get End of Discharge flag of string 2
+	StateChannel i = this.channel(ChannelId.END_OF_CHARGE_REQUEST_2);
+	Optional<Boolean> END_CHARGE = i.getNextValue().asOptional();
+	return END_CHARGE.isPresent() && END_CHARGE.get();
+}
+
+public boolean StringState_1 () {					// get string status of string 1
+	StateChannel i = this.channel(ChannelId.STRING_STATUS_1);
+	Optional<Boolean> END_CHARGE = i.getNextValue().asOptional();
+	return END_CHARGE.isPresent() && END_CHARGE.get();
+}
+public boolean StringState_2 () {					// get string status of string 2
+	StateChannel i = this.channel(ChannelId.STRING_STATUS_2);
+	Optional<Boolean> END_CHARGE = i.getNextValue().asOptional();
+	return END_CHARGE.isPresent() && END_CHARGE.get();
+}
 
 public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 	
@@ -228,7 +320,7 @@ public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 	HV_ISOLATION_IMPEDANCE_1(new Doc().unit(Unit.OHM)),
 	CELL_HIGHEST_VOLTAGE_1(new Doc().unit(Unit.MILLIVOLT)),
 	CELL_LOWEST_VOLTAGE_1(new Doc().unit(Unit.MILLIVOLT)),
-	CHARGING_POWER_1(new Doc().unit(Unit.KILOWATT)),
+	DC_POWER_1(new Doc().unit(Unit.KILOWATT)),
 	HV_BAT_INSTANT_CURRENT_1(new Doc().unit(Unit.AMPERE)),
 	HV_POWER_CONNECTION_1(new Doc().unit(Unit.NONE)),
 	HV_BAT_LEVEL_2_FAILURE_1(new Doc().unit(Unit.NONE)),
@@ -260,6 +352,8 @@ public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 	START_STOP_STRING_1(new Doc().unit(Unit.NONE)),
 	ALARMS_1(new Doc().unit(Unit.NONE)),
 	FAULTS_1(new Doc().unit(Unit.NONE)),
+	END_OF_DISCHARGE_REQUEST_1(new Doc().unit(Unit.NONE)),
+	
 	
 	SET_ENABLE_STRING_2(new Doc().unit(Unit.NONE)),
 	SET_START_STOP_STRING_2(new Doc().unit(Unit.NONE)),
@@ -278,7 +372,7 @@ public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 	HV_ISOLATION_IMPEDANCE_2(new Doc().unit(Unit.OHM)),
 	CELL_HIGHEST_VOLTAGE_2(new Doc().unit(Unit.MILLIVOLT)),
 	CELL_LOWEST_VOLTAGE_2(new Doc().unit(Unit.MILLIVOLT)),
-	CHARGING_POWER_2(new Doc().unit(Unit.KILOWATT)),
+	DC_POWER_2(new Doc().unit(Unit.KILOWATT)),
 	HV_BAT_INSTANT_CURRENT_2(new Doc().unit(Unit.AMPERE)),
 	HV_POWER_CONNECTION_2(new Doc().unit(Unit.NONE)),
 	HV_BAT_LEVEL_2_FAILURE_2(new Doc().unit(Unit.NONE)),
@@ -310,6 +404,8 @@ public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 	START_STOP_STRING_2(new Doc().unit(Unit.NONE)),
 	ALARMS_2(new Doc().unit(Unit.NONE)),
 	FAULTS_2(new Doc().unit(Unit.NONE)),
+	END_OF_DISCHARGE_REQUEST_2(new Doc().unit(Unit.NONE)),
+	
 	SERIAL_NUMBER(new Doc().unit(Unit.NONE)),
 	MODBUS_VERSION(new Doc().unit(Unit.NONE)),
 	BATTERY_TYP(new Doc().unit(Unit.NONE)),
@@ -336,7 +432,7 @@ public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 	TOTAL_DC_VOLTAGE(new Doc().unit(Unit.VOLT)),
 	MAX_CHARGE_CURRENT(new Doc().unit(Unit.AMPERE)),
 	MAX_DISCHARGE_CURRENT(new Doc().unit(Unit.AMPERE)),
-	TOTAL_POWER(new Doc().unit(Unit.WATT)),				// UNIT: KILOWATT
+	TOTAL_DC_POWER(new Doc().unit(Unit.KILOWATT)),				
 	INVERTER_STATE_REQUEST(new Doc().unit(Unit.NONE)),
 	BATTERY_POWER_REQUEST(new Doc().unit(Unit.NONE)),
 	BATTERY_CHARGE_DISCHARGE_REQUEST(new Doc().unit(Unit.NONE)),
@@ -354,14 +450,15 @@ public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 	MIN_STRING_CURRENT(new Doc().unit(Unit.AMPERE)),
 	MIN_STRING_CURRENT_STRING(new Doc().unit(Unit.AMPERE)),
 	AVERAGE_STRING_CURRENT(new Doc().unit(Unit.AMPERE)),
-	ALARMS_STRING(new Doc().unit(Unit.NONE)),
-	FAULTS_STRING(new Doc().unit(Unit.NONE)),
+	ALARMS_STACK(new Doc().unit(Unit.NONE)),
+	FAULTS_STACK(new Doc().unit(Unit.NONE)),
+	WATCHDOG(new Doc().unit(Unit.SECONDS)),
 	SET_BATTERY_CHARGE_DISCHARGE_REQUEST(new Doc().unit(Unit.NONE)),
 	SET_START_STOP_BATTERY_STACK(new Doc().unit(Unit.NONE)),
 	
 	;
 	
-	private final Doc doc;
+	public final Doc doc;
 
 	private ChannelId(Doc doc) {
 		this.doc = doc;
@@ -409,9 +506,9 @@ protected ModbusProtocol defineModbusProtocol() {
 			new FC3ReadRegistersTask(0x113, Priority.HIGH, //
 					m(BSMU.ChannelId.CELL_LOWEST_VOLTAGE_1, new UnsignedWordElement(0x113))),
 			new FC3ReadRegistersTask(0x114, Priority.HIGH, //
-					m(BSMU.ChannelId.CHARGING_POWER_1, new UnsignedWordElement(0x114))),
+					m(BSMU.ChannelId.DC_POWER_1, new SignedWordElement(0x114))),
 			new FC3ReadRegistersTask(0x115, Priority.HIGH, //
-					m(BSMU.ChannelId.HV_BAT_INSTANT_CURRENT_1, new UnsignedWordElement(0x115))),
+					m(BSMU.ChannelId.HV_BAT_INSTANT_CURRENT_1, new SignedWordElement(0x115))),
 			new FC3ReadRegistersTask(0x116, Priority.HIGH, //
 					m(BSMU.ChannelId.HV_POWER_CONNECTION_1, new UnsignedWordElement(0x116))),
 			new FC3ReadRegistersTask(0x117, Priority.HIGH, //
@@ -472,6 +569,8 @@ protected ModbusProtocol defineModbusProtocol() {
 					m(BSMU.ChannelId.ALARMS_1, new UnsignedWordElement(0x163))),
 			new FC3ReadRegistersTask(0x164, Priority.HIGH, //
 					m(BSMU.ChannelId.FAULTS_1, new UnsignedWordElement(0x164))),
+			new FC3ReadRegistersTask(0x165, Priority.HIGH, //
+					m(BSMU.ChannelId.END_OF_DISCHARGE_REQUEST_1, new UnsignedWordElement(0x165))),
 //---------------------------------------------WRITE BATTERY 1-------------------------------------------------------
 			new FC6WriteRegisterTask(0x161,  //
 					m(BSMU.ChannelId.SET_ENABLE_STRING_1, new UnsignedWordElement(0x161))),
@@ -509,9 +608,9 @@ protected ModbusProtocol defineModbusProtocol() {
 			new FC3ReadRegistersTask(0x213, Priority.HIGH, //
 					m(BSMU.ChannelId.CELL_LOWEST_VOLTAGE_2, new UnsignedWordElement(0x213))),
 			new FC3ReadRegistersTask(0x214, Priority.HIGH, //
-					m(BSMU.ChannelId.CHARGING_POWER_2, new UnsignedWordElement(0x214))),
+					m(BSMU.ChannelId.DC_POWER_2, new SignedWordElement(0x214))),
 			new FC3ReadRegistersTask(0x215, Priority.HIGH, //
-					m(BSMU.ChannelId.HV_BAT_INSTANT_CURRENT_2, new UnsignedWordElement(0x215))),
+					m(BSMU.ChannelId.HV_BAT_INSTANT_CURRENT_2, new SignedWordElement(0x215))),
 			new FC3ReadRegistersTask(0x216, Priority.HIGH, //
 					m(BSMU.ChannelId.HV_POWER_CONNECTION_2, new UnsignedWordElement(0x216))),
 			new FC3ReadRegistersTask(0x217, Priority.HIGH, //
@@ -572,6 +671,8 @@ protected ModbusProtocol defineModbusProtocol() {
 					m(BSMU.ChannelId.ALARMS_2, new UnsignedWordElement(0x263))),
 			new FC3ReadRegistersTask(0x264, Priority.HIGH, //
 					m(BSMU.ChannelId.FAULTS_2, new UnsignedWordElement(0x264))),
+			new FC3ReadRegistersTask(0x265, Priority.HIGH, //
+					m(BSMU.ChannelId.END_OF_DISCHARGE_REQUEST_2, new UnsignedWordElement(0x265))),
 //----------------------------------------WRITE BATTERY 2--------------------------------------------------------------
 			new FC6WriteRegisterTask(0x261, //
 					m(BSMU.ChannelId.SET_ENABLE_STRING_2, new UnsignedWordElement(0x261))),
@@ -623,7 +724,7 @@ protected ModbusProtocol defineModbusProtocol() {
 			new FC3ReadRegistersTask(0x521, Priority.HIGH,
 					m(BSMU.ChannelId.REST_CAPACITY, new UnsignedWordElement(0x521))),
 			new FC3ReadRegistersTask(0x522, Priority.HIGH,
-					m(BSMU.ChannelId.TOTAL_DC_CURRENT, new UnsignedWordElement(0x522))),
+					m(BSMU.ChannelId.TOTAL_DC_CURRENT, new SignedWordElement(0x522))),
 			new FC3ReadRegistersTask(0x523, Priority.HIGH,
 					m(BSMU.ChannelId.TOTAL_DC_VOLTAGE, new UnsignedWordElement(0x523))),
 			new FC3ReadRegistersTask(0x524, Priority.HIGH,
@@ -631,7 +732,7 @@ protected ModbusProtocol defineModbusProtocol() {
 			new FC3ReadRegistersTask(0x525, Priority.HIGH,
 					m(BSMU.ChannelId.MAX_DISCHARGE_CURRENT, new UnsignedWordElement(0x525))),
 			new FC3ReadRegistersTask(0x526, Priority.HIGH,
-					m(BSMU.ChannelId.TOTAL_POWER, new UnsignedWordElement(0x526))),
+					m(BSMU.ChannelId.TOTAL_DC_POWER, new SignedWordElement(0x526))),
 			new FC3ReadRegistersTask(0x527, Priority.HIGH,
 					m(BSMU.ChannelId.INVERTER_STATE_REQUEST, new UnsignedWordElement(0x527))),
 			new FC3ReadRegistersTask(0x528, Priority.HIGH,
@@ -667,9 +768,11 @@ protected ModbusProtocol defineModbusProtocol() {
 			new FC3ReadRegistersTask(0x543, Priority.HIGH,
 					m(BSMU.ChannelId.AVERAGE_STRING_CURRENT, new UnsignedWordElement(0x543))),
 			new FC3ReadRegistersTask(0x544, Priority.HIGH,
-					m(BSMU.ChannelId.ALARMS_STRING, new UnsignedWordElement(0x544))),
+					m(BSMU.ChannelId.ALARMS_STACK, new UnsignedWordElement(0x544))),
 			new FC3ReadRegistersTask(0x545, Priority.HIGH,
-					m(BSMU.ChannelId.FAULTS_STRING, new UnsignedWordElement(0x545))),
+					m(BSMU.ChannelId.FAULTS_STACK, new UnsignedWordElement(0x545))),
+			new FC3ReadRegistersTask(0x550, Priority.HIGH,
+					m(BSMU.ChannelId.WATCHDOG, new UnsignedWordElement(0x550))),
 //-----------------------------------------------WRITE STRING----------------------------------------------------
 			new FC6WriteRegisterTask(0x529,
 					m(BSMU.ChannelId.SET_BATTERY_CHARGE_DISCHARGE_REQUEST, new UnsignedWordElement(0x529))),
@@ -688,28 +791,9 @@ public void handleEvent(Event event) {
 	switch (event.getTopic()) {
 
 	case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
+
+		HandleBatteryMode();
 		HandleBatteryState();
-		if((END_CHARGE_1 = true) && (END_CHARGE_2 = true)) {
-			stopString_1();
-			stopString_2();
-		}
-		else if((END_CHARGE_1 = true) && (END_CHARGE_2 = false)) {
-			stopString_1();
-		}
-		else if((END_CHARGE_2 = true) && (END_CHARGE_1 = false)) {
-			stopString_2();
-		}
-		else {
-			startString_1();
-			startString_2();
-		}
-		
-		if((ACK_1 = true) && (ACK_2 = true)) {
-			startStack();
-		}
-		else {
-			stopStack();
-		}
 		break;
 	}
 }

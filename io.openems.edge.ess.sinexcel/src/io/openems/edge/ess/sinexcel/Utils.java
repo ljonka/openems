@@ -117,7 +117,10 @@ public class Utils {
 					case IP_ADDRESS_3:
 					case IP_ADDRESS_4:
 						
-		
+					case BAT_SOC:
+					case BAT_SOH:
+					case BAT_TEMP:
+					case CELL_DIFF_VOLT:
 						return new IntegerReadChannel(ess, channelId);
 					case SETDATA_MOD_ON_CMD:
 					case SETDATA_MOD_OFF_CMD:
@@ -235,6 +238,7 @@ public class Utils {
 					case STATE_73:
 					case STATE_74:
 						return new StateChannel(ess, channelId);
+					
 					
 						
 					}

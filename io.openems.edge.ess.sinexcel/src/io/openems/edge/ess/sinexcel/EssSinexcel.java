@@ -18,7 +18,7 @@ import org.osgi.service.event.EventHandler;
 import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import io.openems.edge.battery.api.Battery;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
@@ -30,6 +30,7 @@ import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
+import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.StateChannel;
 import io.openems.edge.common.channel.doc.Doc;
@@ -61,11 +62,17 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	@Reference
 	protected ConfigurationAdmin cm;
 
+	private Battery battery;
+	
 	@Activate
 	void activate(ComponentContext context, Config config) {
 		super.activate(context, config.service_pid(), config.id(), config.enabled(), DEFAULT_UNIT_ID, this.cm, "Modbus",
 				config.modbus_id());
-
+		if (OpenemsComponent.updateReferenceFilter(this.cm, config.service_pid(), "battery", config.battery_id())) {
+			return;
+		}
+		
+		doChannelMapping();
 	}
 
 	@Deactivate
@@ -81,9 +88,17 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	protected void setModbus(BridgeModbus modbus) {
 		super.setModbus(modbus); // Bridge Modbus
 	}
+	protected void setBattery(Battery battery) {
+		this.battery = battery;
+	}
 
 	public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 		SUNSPEC_DID_0103(new Doc()),//
+		
+		BAT_SOC(new Doc().unit(Unit.PERCENT)),
+		BAT_SOH(new Doc().unit(Unit.PERCENT)),
+		BAT_TEMP(new Doc().unit(Unit.DEGREE_CELSIUS)),
+		CELL_DIFF_VOLT(new Doc().unit(Unit.MILLIVOLT)),
 		
 		SETDATA_MOD_ON_CMD(new Doc().unit(Unit.ON_OFF)),
 		SETDATA_MOD_OFF_CMD(new Doc().unit(Unit.ON_OFF)),
@@ -296,6 +311,41 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 
 		}
 	}
+//------------------------------------------GET BSMU/BATTERY VALUE-----------------------------------------
+	private void getBatteryValue() {
+		int BATTERY_TEMP_1 = battery.getBatteryTemp().value().orElse(0);
+		int SOC_1 = battery.getSoc().value().orElse(0);
+		int SOH_1 = battery.getSoh().value().orElse(0);
+		int FAULT_1 = battery.getFaults_1().value().orElse(0);
+		int ALARMS_1 = battery.getAlarms_1().value().orElse(0);
+		int OPERATING_STATE_1 = battery.getOperatingState_1().value().orElse(0);
+		int HIGHEST_CELL_VOLTAGE_1 = battery.getHighestCellVoltage_1().value().orElse(0);
+		int LOWEST_CELL_VOLTAGE_1 = battery.getLowestCellVoltage_1().value().orElse(0);
+		
+		CELL_DIFF_VOLTAGE = HIGHEST_CELL_VOLTAGE_1 - LOWEST_CELL_VOLTAGE_1;
+	}
+	
+	private void doChannelMapping() {
+		this.battery.getSoc().onChange(value -> {
+			this.getSoc().setNextValue(value.get());
+			this.channel(ChannelId.BAT_SOC).setNextValue(value.get());
+			this.channel(SymmetricEss.ChannelId.SOC).setNextValue(value.get());
+		});
+
+		this.battery.getSoh().onChange(value -> {
+			this.getSoc().setNextValue(value.get());
+			this.channel(ChannelId.BAT_SOH).setNextValue(value.get());
+		});
+
+		this.battery.getBatteryTemp().onChange(value -> {
+			this.getSoc().setNextValue(value.get());
+			this.channel(ChannelId.BAT_TEMP).setNextValue(value.get());
+		});
+		
+		IntegerReadChannel CELL_DIFF_VOLTAGE = this.channel(ChannelId.CELL_DIFF_VOLT);
+		
+	}
+	
 //------------------------------------------START AND STOP-------------------------------------------------
 	public void startSystem() {
 		IntegerWriteChannel SETDATA_ModOnCmd = this.channel(ChannelId.SETDATA_MOD_ON_CMD);
@@ -857,12 +907,13 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	
 	
 /**
- * Example: Value 3000 means 300; Value 3001 means 300,1
+ * Example: Value 3000 means 300 V; Value 3001 means 300,1 V
  */
 	
 	@Reference
 	private Power power;
 	
+	public int CELL_DIFF_VOLTAGE;
 	private int ADDRESS_1 = 192;
 	private int ADDRESS_2 = 168;
 	private int ADDRESS_3 = 1;
@@ -900,6 +951,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
 			doHandling_ON();
 			LIMITS();
+			getBatteryValue();
 //			doHandling_IP_ADDRESS();
 			
 //			if(island = true) {

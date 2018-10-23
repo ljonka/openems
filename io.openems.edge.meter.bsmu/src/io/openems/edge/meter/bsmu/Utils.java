@@ -8,8 +8,7 @@ import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.StateCollectorChannel;
 import io.openems.edge.common.component.OpenemsComponent;
-import io.openems.edge.ess.api.ManagedSymmetricEss;
-import io.openems.edge.ess.api.SymmetricEss;
+
 
 public class Utils {
 	public static Stream<? extends AbstractReadChannel<?>> initializeChannels(BSMU ess) {
@@ -60,14 +59,16 @@ public class Utils {
 					case CELL_LOWEST_VOLTAGE_2:
 					case CELL_LOWEST_VOLTAGE_RCY_1:
 					case CELL_LOWEST_VOLTAGE_RCY_2:
-					case CHARGING_POWER_1:
-					case CHARGING_POWER_2:
+					case DC_POWER_1:
+					case DC_POWER_2:
 					case DISTANCE_TOTALIZER_COPY_1:
 					case DISTANCE_TOTALIZER_COPY_2:
 					case ELEC_MACHINE_SPEED_1:
 					case ELEC_MACHINE_SPEED_2:
 					case END_OF_CHARGE_REQUEST_1:
 					case END_OF_CHARGE_REQUEST_2:
+					case END_OF_DISCHARGE_REQUEST_1:
+					case END_OF_DISCHARGE_REQUEST_2:
 					case ETS_SLEEP_MODE_1:
 					case ETS_SLEEP_MODE_2:
 					case FAULTS_1:
@@ -131,7 +132,7 @@ public class Utils {
 					case WAKE_UP_TYPE_2:
 					case LBC_PRUN_KEY_2:
 					case SAFETY_MODE_1_FLAG_RCY_1:
-					case ALARMS_STRING:
+					case ALARMS_STACK:
 					case AVERAGE_STRING_CURRENT:
 					case AVERAGE_STRING_VOLTAGE:
 					case BATTERY_CHARGE_DISCHARGE_REQUEST:
@@ -144,7 +145,7 @@ public class Utils {
 					case CURRENT_TOTAL_CAPACITY:
 					case ENABLE_STRING_1:
 					case ENABLE_STRING_2:
-					case FAULTS_STRING:
+					case FAULTS_STACK:
 					case INSTALLATION_DATE:
 					case INVERTER_STATE_REQUEST:
 					case MAX_BATTERY_VOLTAGE:
@@ -179,8 +180,9 @@ public class Utils {
 					case TOTAL_DC_CURRENT:
 					case TOTAL_DC_VOLTAGE:
 					case TOTAL_DISCHARGE_ENERGY:
-					case TOTAL_POWER:
+					case TOTAL_DC_POWER:
 					case WARRANTY_DATE:
+					case WATCHDOG:
 						return new IntegerReadChannel(ess, channelId);
 					
 					}
