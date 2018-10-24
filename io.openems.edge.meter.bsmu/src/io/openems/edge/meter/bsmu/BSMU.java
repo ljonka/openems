@@ -30,6 +30,7 @@ import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.StateChannel;
+import io.openems.edge.common.channel.doc.ChannelId;
 import io.openems.edge.common.channel.doc.Doc;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
@@ -63,6 +64,7 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 	private int watchdogInterval = 0;
 	public int CHARGE = 0;
 	public int DISCHARGE = 1;
+	
 	
 
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
@@ -107,6 +109,7 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 		this.channel(ChannelId.ALARMS_2).onChange(value -> { this.channel(Battery.ChannelId.ALARMS_2).setNextValue(value); });
 		this.channel(ChannelId.FAULTS_1).onChange(value -> { this.channel(Battery.ChannelId.FAULTS_1).setNextValue(value); });
 		this.channel(ChannelId.FAULTS_2).onChange(value -> { this.channel(Battery.ChannelId.FAULTS_2).setNextValue(value); });
+		this.channel(ChannelId.READY_TO_START).onChange(value -> { this.channel(Battery.ChannelId.READY_FOR_WORKING).setNextValue(value); });
 
 
 	}																														
@@ -131,7 +134,7 @@ private void HandleBatteryState() {
 //		startString_1();
 //		startString_2();
 		startStack();
-		Monitoring();
+		Monitoring();		// Waiting for the End of Charge/Discharge Request of the BSMU/Battery
 		break;
 	}
 }
@@ -139,15 +142,24 @@ private void HandleBatteryState() {
 private void HandleBatteryMode() {
 	switch (this.batteryMode) {
 	case STANDBY:
-		
+		NotReadyToStart();
 		break;
 	case CHARGE:
 		ChargeReq();
+		ReadyToStart();
 		break;
 	case DISCHARGE:
 		DischargeReq();
+		ReadyToStart();
 		break;
 	}
+}
+
+private void ReadyToStart() {
+	this.channel(ChannelId.READY_TO_START).setNextValue(Start);
+}
+private void NotReadyToStart() {
+	this.channel(ChannelId.READY_TO_START).setNextValue(Stop);
 }
 
 private void setWatchdog() {
@@ -305,6 +317,8 @@ public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 	
 	SET_ENABLE_STRING_1(new Doc().unit(Unit.NONE)),
 	SET_START_STOP_STRING_1(new Doc().unit(Unit.NONE)),
+	
+	READY_TO_START(new Doc().unit(Unit.NONE)),
 	
 	END_OF_CHARGE_REQUEST_1(new Doc().unit(Unit.NONE)),
 	AVAILABLE_POWER_1(new Doc().unit(Unit.KILOWATT)),

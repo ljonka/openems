@@ -321,6 +321,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		int OPERATING_STATE_1 = battery.getOperatingState_1().value().orElse(0);
 		int HIGHEST_CELL_VOLTAGE_1 = battery.getHighestCellVoltage_1().value().orElse(0);
 		int LOWEST_CELL_VOLTAGE_1 = battery.getLowestCellVoltage_1().value().orElse(0);
+		BATTERY_IS_READY = battery.getReadyForWorking().value().orElse(false);
 		
 		CELL_DIFF_VOLTAGE = HIGHEST_CELL_VOLTAGE_1 - LOWEST_CELL_VOLTAGE_1;
 	}
@@ -874,7 +875,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		IntegerWriteChannel SET_REACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_REACTIVE);
 		
 		int reactiveValue = (int)((reactivePower/100));
-		if((reactiveValue < MAX_REACTIVE_POWER) && (reactiveValue > (MAX_REACTIVE_POWER*(-1)))) {
+		if((reactiveValue < MAX_REACTIVE_POWER) && (reactiveValue > (MAX_REACTIVE_POWER*(-1))) && (BATTERY_IS_READY = true)) {
 			try {
 				SET_REACTIVE_POWER.setNextWriteValue(reactiveValue);
 			}
@@ -889,7 +890,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		
 		
 		int activeValue = (int) ((activePower/100));
-		if((activeValue < MAX_ACTIVE_POWER) && (activeValue > (MAX_ACTIVE_POWER*(-1)))) {
+		if((activeValue < MAX_ACTIVE_POWER) && (activeValue > (MAX_ACTIVE_POWER*(-1))) && (BATTERY_IS_READY = true)) {
 			try {
 				SET_ACTIVE_POWER.setNextWriteValue(activeValue);
 			}
@@ -913,6 +914,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	@Reference
 	private Power power;
 	
+	public boolean BATTERY_IS_READY;
 	public int CELL_DIFF_VOLTAGE;
 	private int ADDRESS_1 = 192;
 	private int ADDRESS_2 = 168;
@@ -952,6 +954,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 			doHandling_ON();
 			LIMITS();
 			getBatteryValue();
+			doChannelMapping();
 //			doHandling_IP_ADDRESS();
 			
 //			if(island = true) {
