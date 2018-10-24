@@ -218,7 +218,6 @@ export abstract class AbstractSection {
             svgEnergyFlow = this.getSvgEnergyFlow(sumRatio, this.energyFlow.radius, energyFlowValue);
         }
         this.energyFlow.update(svgEnergyFlow);
-        console.log("GridValueRatio2:", valueRatio)
     }
 
     /**

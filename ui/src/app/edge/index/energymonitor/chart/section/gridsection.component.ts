@@ -17,7 +17,6 @@ export class GridSectionComponent extends AbstractSection {
     protected gridMode: number
 
     public updateGridValue(buyAbsolute: number, sellAbsolute: number, valueRatio: number, sumBuyRatio: number, sumSellRatio: number, gridMode: number) {
-        console.log('RATIO BEFORE', valueRatio)
         valueRatio = valueRatio / 2; // interval from -50 to 50
         this.gridMode = gridMode
         if (gridMode && this.square) {
@@ -34,7 +33,6 @@ export class GridSectionComponent extends AbstractSection {
             this.name = this.translate.instant('General.Grid')
             super.updateGrid(0, 0, 0);
         }
-        console.log('Grid ValueRatio 1:', valueRatio)
     }
 
     protected getSquarePosition(square: SvgSquare, innerRadius: number): SvgSquarePosition {
