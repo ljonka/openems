@@ -69,22 +69,22 @@ export class CurrentDataAndSummary_2018_8 extends CurrentDataAndSummary {
             result.storage.chargeActivePower = result.storage.chargeActivePowerAC; // TODO
             result.storage.dischargeActivePowerAC = essActivePower > 0 ? essActivePower : 0;
             result.storage.dischargeActivePower = result.storage.dischargeActivePowerAC; // TODO
+            console.log("ESSACTIVEPOWER", essActivePower)
             if (sum['ProductionDcActualPower'] != null) {
                 result.storage.chargeActivePowerDC = sum['ProductionDcActualPower'];
                 result.storage.hasDC = true;
             }
 
             if (essActivePower > 0) {
-                result.storage.dischargeActivePower = 0;
-                result.storage.chargeActivePower = essActivePower;
-                result.storage.powerRatio = Math.round(result.storage.chargeActivePower / 3000 * 100);
+                result.storage.chargeActivePower = 0;
+                result.storage.dischargeActivePower = essActivePower;
+                result.storage.powerRatio = Math.round(result.storage.dischargeActivePower / 3000 * 100);
             }
             else {
-                result.storage.dischargeActivePower = essActivePower * -1;
-                result.storage.chargeActivePower = 0;
-                result.storage.powerRatio = Math.round(result.storage.dischargeActivePower / 3000 * -100);
+                result.storage.chargeActivePower = essActivePower * -1;
+                result.storage.dischargeActivePower = 0;
+                result.storage.powerRatio = Math.round(result.storage.chargeActivePower / 3000 * -100);
             }
-
         }
 
         {
