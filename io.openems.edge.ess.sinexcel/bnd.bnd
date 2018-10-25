@@ -18,7 +18,7 @@ Export-Package: \
 	io.openems.common;version=latest,\
 	io.openems.edge.bridge.modbus;version=latest,\
 	io.openems.edge.battery.api;version=latest,\
-	io.openems.edge.battery.soltaro;version=latest
+	io.openems.edge.meter.bsmu;version=latest
 
 -testpath: \
 	osgi.enroute.junit.wrapper;version=4.12, \

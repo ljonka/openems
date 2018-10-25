@@ -1,6 +1,5 @@
 package io.openems.edge.meter.bsmu;
 
-import java.util.Collection;
 import java.util.Optional;
 
 import org.osgi.service.cm.ConfigurationAdmin;
@@ -27,10 +26,8 @@ import io.openems.edge.bridge.modbus.api.element.SignedWordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
-import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.StateChannel;
-import io.openems.edge.common.channel.doc.ChannelId;
 import io.openems.edge.common.channel.doc.Doc;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
@@ -50,7 +47,6 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 	public static final int DEFAULT_UNIT_ID = 5;
 	
 	private BatteryState batteryState;
-	private BatteryMode batteryMode;
 	public Battery battery;
 	public String modbusBridgeId;
 	public int Start = 1;
@@ -123,42 +119,27 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 	@Reference
 	protected ConfigurationAdmin cm;
 private void HandleBatteryState() {
-	setWatchdog();
 	switch (this.batteryState) {
 	case OFF:
 //		stopString_1();
 //		stopString_2();
 		stopStack();
+		NotReadyToStart();
 		break;
 	case ON:
 //		startString_1();
 //		startString_2();
 		startStack();
+		ReadyToStart();
 		Monitoring();		// Waiting for the End of Charge/Discharge Request of the BSMU/Battery
 		break;
 	}
 }
 
-private void HandleBatteryMode() {
-	switch (this.batteryMode) {
-	case STANDBY:
-		NotReadyToStart();
-		break;
-	case CHARGE:
-		ChargeReq();
-		ReadyToStart();
-		break;
-	case DISCHARGE:
-		DischargeReq();
-		ReadyToStart();
-		break;
-	}
-}
-
-private void ReadyToStart() {
+public void ReadyToStart() {
 	this.channel(ChannelId.READY_TO_START).setNextValue(Start);
 }
-private void NotReadyToStart() {
+public void NotReadyToStart() {
 	this.channel(ChannelId.READY_TO_START).setNextValue(Stop);
 }
 
@@ -805,55 +786,11 @@ public void handleEvent(Event event) {
 	switch (event.getTopic()) {
 
 	case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-
-		HandleBatteryMode();
+		setWatchdog();
 		HandleBatteryState();
 		break;
 	}
 }
-
-
-
-
-@Override
-public String id() {
-	// TODO Auto-generated method stub
-	return null;
-}
-
-@Override
-public boolean isEnabled() {
-	// TODO Auto-generated method stub
-	return false;
-}
-
-@Override
-public String servicePid() {
-	// TODO Auto-generated method stub
-	return null;
-}
-
-@Override
-public ComponentContext componentContext() {
-	// TODO Auto-generated method stub
-	return null;
-}
-
-@Override
-public Channel<?> _channel(String channelName) {
-	// TODO Auto-generated method stub
-	return null;
-}
-
-@Override
-public Collection<Channel<?>> channels() {
-	// TODO Auto-generated method stub
-	return null;
-}
-
-
-
-
 
 
 }

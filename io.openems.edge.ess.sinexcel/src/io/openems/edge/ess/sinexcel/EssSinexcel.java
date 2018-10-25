@@ -18,7 +18,6 @@ import org.osgi.service.event.EventHandler;
 import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import io.openems.edge.battery.api.Battery;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
@@ -30,7 +29,6 @@ import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
-import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.StateChannel;
 import io.openems.edge.common.channel.doc.Doc;
@@ -42,6 +40,7 @@ import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.api.SymmetricEss;
 import io.openems.edge.ess.power.api.Power;
+import io.openems.edge.meter.bsmu.BSMU;
 
 
 @Designate(ocd = Config.class, factory = true)
@@ -62,7 +61,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	@Reference
 	protected ConfigurationAdmin cm;
 
-	private Battery battery;
+	@SuppressWarnings("restriction")
+	private BSMU battery;
 	
 	@Activate
 	void activate(ComponentContext context, Config config) {
@@ -88,9 +88,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	protected void setModbus(BridgeModbus modbus) {
 		super.setModbus(modbus); // Bridge Modbus
 	}
-	protected void setBattery(Battery battery) {
-		this.battery = battery;
-	}
+//	protected void setBattery(Battery battery) {
+//		this.battery = battery;
+//	}
 
 	public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 		SUNSPEC_DID_0103(new Doc()),//
@@ -313,17 +313,14 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	}
 //------------------------------------------GET BSMU/BATTERY VALUE-----------------------------------------
 	private void getBatteryValue() {
-		int BATTERY_TEMP_1 = battery.getBatteryTemp().value().orElse(0);
-		int SOC_1 = battery.getSoc().value().orElse(0);
-		int SOH_1 = battery.getSoh().value().orElse(0);
-		int FAULT_1 = battery.getFaults_1().value().orElse(0);
-		int ALARMS_1 = battery.getAlarms_1().value().orElse(0);
-		int OPERATING_STATE_1 = battery.getOperatingState_1().value().orElse(0);
+//		int FAULT_1 = battery.getFaults_1().value().orElse(0);
+//		int ALARMS_1 = battery.getAlarms_1().value().orElse(0);
 		int HIGHEST_CELL_VOLTAGE_1 = battery.getHighestCellVoltage_1().value().orElse(0);
 		int LOWEST_CELL_VOLTAGE_1 = battery.getLowestCellVoltage_1().value().orElse(0);
 		BATTERY_IS_READY = battery.getReadyForWorking().value().orElse(false);
 		
 		CELL_DIFF_VOLTAGE = HIGHEST_CELL_VOLTAGE_1 - LOWEST_CELL_VOLTAGE_1;
+		this.channel(ChannelId.CELL_DIFF_VOLT).setNextValue(CELL_DIFF_VOLTAGE);
 	}
 	
 	private void doChannelMapping() {
@@ -334,16 +331,13 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		});
 
 		this.battery.getSoh().onChange(value -> {
-			this.getSoc().setNextValue(value.get());
 			this.channel(ChannelId.BAT_SOH).setNextValue(value.get());
 		});
 
 		this.battery.getBatteryTemp().onChange(value -> {
-			this.getSoc().setNextValue(value.get());
 			this.channel(ChannelId.BAT_TEMP).setNextValue(value.get());
 		});
 		
-		IntegerReadChannel CELL_DIFF_VOLTAGE = this.channel(ChannelId.CELL_DIFF_VOLT);
 		
 	}
 	
@@ -868,6 +862,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	}
 	
 	
+	@SuppressWarnings("restriction")
 	@Override
 	public void applyPower(int activePower, int reactivePower) {
 		
@@ -876,27 +871,50 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		
 		int reactiveValue = (int)((reactivePower/100));
 		if((reactiveValue < MAX_REACTIVE_POWER) && (reactiveValue > (MAX_REACTIVE_POWER*(-1))) && (BATTERY_IS_READY = true)) {
+			if (reactiveValue < 0) {
+				battery.ChargeReq();
 			try {
 				SET_REACTIVE_POWER.setNextWriteValue(reactiveValue);
 			}
 			catch (OpenemsException e) {
 				log.error("EssSinexcel.applyPower(): Problem occurred while trying so set reactive power" + e.getMessage());
 			    }
+			}
+			else if(reactiveValue > 0) {
+				battery.DischargeReq();
+				try {
+					SET_REACTIVE_POWER.setNextWriteValue(reactiveValue);
+				}
+				catch (OpenemsException e) {
+					log.error("EssSinexcel.applyPower(): Problem occurred while trying so set reactive power" + e.getMessage());
+				    }
+			}
 		}
 		else {
 			reactiveValue = 0;
 			log.error("Reactive power limit exceeded");
 		}
 		
-		
 		int activeValue = (int) ((activePower/100));
 		if((activeValue < MAX_ACTIVE_POWER) && (activeValue > (MAX_ACTIVE_POWER*(-1))) && (BATTERY_IS_READY = true)) {
+			if(activePower < 0) {
+				battery.ChargeReq();
 			try {
 				SET_ACTIVE_POWER.setNextWriteValue(activeValue);
 			}
 			catch (OpenemsException e) {
 				log.error("EssSinexcel.applyPower(): Problem occurred while trying so set active power" + e.getMessage());
 			    }
+			}
+			else if(activePower > 0) {
+				battery.DischargeReq();
+				try {
+					SET_ACTIVE_POWER.setNextWriteValue(activeValue);
+				}
+				catch (OpenemsException e) {
+					log.error("EssSinexcel.applyPower(): Problem occurred while trying so set active power" + e.getMessage());
+				    }
+			}
 		}
 		else {
 			activeValue = 0;
