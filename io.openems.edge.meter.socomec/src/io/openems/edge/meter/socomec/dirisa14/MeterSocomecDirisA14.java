@@ -99,8 +99,8 @@ public class MeterSocomecDirisA14 extends AbstractOpenemsModbusComponent
 						m(AsymmetricMeter.ChannelId.CURRENT_L2, new UnsignedDoublewordElement(0xc562)), //
 						m(AsymmetricMeter.ChannelId.CURRENT_L3, new UnsignedDoublewordElement(0xc564)), //
 						m(SymmetricMeter.ChannelId.CURRENT, new UnsignedDoublewordElement(0xc566)), //
-						m(SymmetricMeter.ChannelId.ACTIVE_POWER, new SignedDoublewordElement(0xc568), ElementToChannelConverter.SCALE_FACTOR_1), //
-						m(SymmetricMeter.ChannelId.REACTIVE_POWER, new SignedDoublewordElement(0xc56A), ElementToChannelConverter.SCALE_FACTOR_1), //
+						m(SymmetricMeter.ChannelId.ACTIVE_POWER, new SignedDoublewordElement(0xc568), ElementToChannelConverter.SCALE_FACTOR_1_AND_KEEP_POSITIVE), //
+						m(SymmetricMeter.ChannelId.REACTIVE_POWER, new SignedDoublewordElement(0xc56A), ElementToChannelConverter.SCALE_FACTOR_1_AND_KEEP_POSITIVE), //
 						// TODO: add ApparentPower here
 						new DummyRegisterElement(0xc56C, 0xc56F), //
 						m(AsymmetricMeter.ChannelId.ACTIVE_POWER_L1, new SignedDoublewordElement(0xc570),

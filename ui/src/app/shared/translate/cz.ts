@@ -43,13 +43,15 @@ export const TRANSLATION = {
     Edge: {
         Index: {
             Energymonitor: {
-                Title: "Monitoring energetických toků",
-                ConsumptionWarning: "Spotřeba & neznámá výroba",
-                Storage: "Úložiště",
-                ReactivePower: "Jalový výkon",
-                ActivePower: "Činný výkon",
-                GridMeter: "Elektroměr - Odběr",
-                ProductionMeter: "Elektroměr - Výroba"
+                Title: "Energetický monitor",
+                ConsumptionWarning: "Spotřeba a neznámé výrobce",
+                Storage: "Skladování",
+                ReactivePower: "Reaktivní síla",
+                ActivePower: "Aktivní napájení",
+                GridMeter: "Měřič sítě",
+                ProductionMeter: "Výrobní měřidlo",
+                StorageDischarge: "Ukládání odpadu",
+                StorageCharge: "Skladovací poplatek"
             },
             Energytable: {
                 Title: "Tabulka hodnot",

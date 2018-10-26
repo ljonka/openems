@@ -15,6 +15,7 @@ import org.osgi.service.metatype.annotations.Designate;
 
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
 import io.openems.edge.bridge.modbus.api.element.SignedWordElement;
@@ -349,13 +350,13 @@ public class FeneconMiniEss extends AbstractOpenemsModbusComponent
 						new DummyRegisterElement(109), //
 						m(FeneconMiniEss.ChannelId.BATTERY_VOLTAGE, new UnsignedWordElement(110)), //
 						m(FeneconMiniEss.ChannelId.BATTERY_CURRENT, new SignedWordElement(111)), //
-						m(SymmetricEss.ChannelId.ACTIVE_POWER, new SignedWordElement(112))), //
+						m(SymmetricEss.ChannelId.ACTIVE_POWER, new SignedWordElement(112), ElementToChannelConverter.KEEP_POSITIVE)), //
 				new FC3ReadRegistersTask(2007, Priority.HIGH, //
-						m(FeneconMiniEss.ChannelId.ACTIVE_POWER_L1, new UnsignedWordElement(2007))), //
+						m(FeneconMiniEss.ChannelId.ACTIVE_POWER_L1, new UnsignedWordElement(2007), ElementToChannelConverter.KEEP_POSITIVE)), //
 				new FC3ReadRegistersTask(2107, Priority.HIGH, //
-						m(FeneconMiniEss.ChannelId.ACTIVE_POWER_L2, new UnsignedWordElement(2107))), //
+						m(FeneconMiniEss.ChannelId.ACTIVE_POWER_L2, new UnsignedWordElement(2107), ElementToChannelConverter.KEEP_POSITIVE)), //
 				new FC3ReadRegistersTask(2207, Priority.HIGH, //
-						m(FeneconMiniEss.ChannelId.ACTIVE_POWER_L3, new UnsignedWordElement(2207))), //
+						m(FeneconMiniEss.ChannelId.ACTIVE_POWER_L3, new UnsignedWordElement(2207), ElementToChannelConverter.KEEP_POSITIVE)), //
 				new FC3ReadRegistersTask(3000, Priority.HIGH, //
 						m(FeneconMiniEss.ChannelId.BECU1_CHARGE_CURRENT, new UnsignedWordElement(3000)), //
 						m(FeneconMiniEss.ChannelId.BECU1_DISCHARGE_CURRENT, new UnsignedWordElement(3001)), //
