@@ -634,7 +634,7 @@ public class EssFeneconCommercial40 extends AbstractOpenemsModbusComponent
 						m(EssFeneconCommercial40.ChannelId.INVERTER_CURRENT_L3, new SignedWordElement(0x0227),
 								ElementToChannelConverter.SCALE_FACTOR_2), //
 						m(SymmetricEss.ChannelId.ACTIVE_POWER, new SignedWordElement(0x0228),
-								ElementToChannelConverter.SCALE_FACTOR_2), //
+								ElementToChannelConverter.SCALE_FACTOR_2_AND_KEEP_POSITIVE), //
 						new DummyRegisterElement(0x0229, 0x022F), //
 						m(ChannelId.ORIGINAL_ALLOWED_CHARGE_POWER, new SignedWordElement(0x0230),
 								ElementToChannelConverter.SCALE_FACTOR_2), //

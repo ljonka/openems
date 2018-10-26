@@ -147,12 +147,12 @@ public class FeneconProEss extends AbstractOpenemsModbusComponent
 								ElementToChannelConverter.SCALE_FACTOR_2), //
 						m(FeneconProEss.ChannelId.VOLTAGE_L3, new UnsignedWordElement(123),
 								ElementToChannelConverter.SCALE_FACTOR_2), //
-						m(AsymmetricEss.ChannelId.ACTIVE_POWER_L1, new SignedWordElement(124)), //
-						m(AsymmetricEss.ChannelId.ACTIVE_POWER_L2, new SignedWordElement(125)), //
-						m(AsymmetricEss.ChannelId.ACTIVE_POWER_L3, new SignedWordElement(126)), //
-						m(AsymmetricEss.ChannelId.REACTIVE_POWER_L1, new SignedWordElement(127)), //
-						m(AsymmetricEss.ChannelId.REACTIVE_POWER_L2, new SignedWordElement(128)), //
-						m(AsymmetricEss.ChannelId.REACTIVE_POWER_L3, new SignedWordElement(129)), //
+						m(AsymmetricEss.ChannelId.ACTIVE_POWER_L1, new SignedWordElement(124), ElementToChannelConverter.KEEP_POSITIVE), //
+						m(AsymmetricEss.ChannelId.ACTIVE_POWER_L2, new SignedWordElement(125), ElementToChannelConverter.KEEP_POSITIVE), //
+						m(AsymmetricEss.ChannelId.ACTIVE_POWER_L3, new SignedWordElement(126), ElementToChannelConverter.KEEP_POSITIVE), //
+						m(AsymmetricEss.ChannelId.REACTIVE_POWER_L1, new SignedWordElement(127), ElementToChannelConverter.KEEP_POSITIVE), //
+						m(AsymmetricEss.ChannelId.REACTIVE_POWER_L2, new SignedWordElement(128), ElementToChannelConverter.KEEP_POSITIVE), //
+						m(AsymmetricEss.ChannelId.REACTIVE_POWER_L3, new SignedWordElement(129), ElementToChannelConverter.KEEP_POSITIVE), //
 						new DummyRegisterElement(130), //
 						m(FeneconProEss.ChannelId.FREQUENCY_L1, new UnsignedWordElement(131),
 								ElementToChannelConverter.SCALE_FACTOR_1), //

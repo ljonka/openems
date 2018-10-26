@@ -15,6 +15,7 @@ import org.osgi.service.metatype.annotations.Designate;
 
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.SignedWordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
@@ -69,7 +70,7 @@ public class FeneconMiniPvMeter extends AbstractOpenemsModbusComponent implement
 	protected ModbusProtocol defineModbusProtocol() {
 		return new ModbusProtocol(this, //
 				new FC3ReadRegistersTask(4006, Priority.HIGH, //
-						m(SymmetricMeter.ChannelId.ACTIVE_POWER, new SignedWordElement(4006))), //
+						m(SymmetricMeter.ChannelId.ACTIVE_POWER, new SignedWordElement(4006), ElementToChannelConverter.KEEP_POSITIVE)), //
 				new FC3ReadRegistersTask(4036, Priority.HIGH, //
 						m(SymmetricMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, new UnsignedDoublewordElement(4036))));//
 	}
