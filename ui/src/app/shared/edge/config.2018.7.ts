@@ -178,6 +178,12 @@ export class ConfigImpl_2018_7 extends ConfigImpl implements DefaultTypes.Config
 
         let ignoreNatures = { EssClusterNature: true };
 
+        // EVCS
+
+        for (let thingId of this.evcsDevices) {
+            result[thingId] = ["State", "Plug", "CurrUser", "ActualPower", "EnergySession", "EnergyTotal"];
+        }
+
         // Set "ignoreNatures"
         for (let thingId of this.esss) {
             let i = this.getImplements(this.config.things[thingId]);
@@ -244,7 +250,7 @@ export class ConfigImpl_2018_7 extends ConfigImpl implements DefaultTypes.Config
     /**
      * Returns ChannelAddresses required by EVCS widget 
      */
-    private getEvcsWidgetChannels(): DefaultTypes.ChannelAddresses {
+    public getEvcsWidgetChannels(): DefaultTypes.ChannelAddresses {
         let result: DefaultTypes.ChannelAddresses = {}
         for (let thingId of this.evcsDevices) {
             result[thingId] = ["State", "Plug", "CurrUser", "ActualPower", "EnergySession", "EnergyTotal"];

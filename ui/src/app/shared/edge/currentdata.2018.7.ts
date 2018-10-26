@@ -53,8 +53,39 @@ export class CurrentDataAndSummary_2018_7 extends CurrentDataAndSummary {
             }, consumption: {
                 powerRatio: null,
                 activePower: null
+            }, evcs: {
+                actualPower: null,
+                energySession: null
             }
         };
+
+        {
+            /*
+            * EVCS
+            * > 0 => Charge
+            * = 0 => No Charge
+            */
+            let actualPower = null;
+            let energySession = null;
+            for (let thing of config.evcsDevices) {
+                if (thing in currentData) {
+                    let evcsData = currentData[thing];
+                    if ("ActualPower" in evcsData) {
+                        actualPower = Utils.addSafely(actualPower, evcsData.actualPower)
+                    }
+                    if ("EnergySession" in evcsData) {
+                        energySession = Utils.addSafely(energySession, evcsData.EnergySession)
+                    }
+                }
+            }
+            if (actualPower) {
+                result.evcs.actualPower = actualPower;
+            }
+            if (energySession) {
+                result.evcs.energySession = energySession;
+            }
+        }
+
 
         {
             /*

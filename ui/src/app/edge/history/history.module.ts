@@ -9,7 +9,7 @@ import { EnergyChartComponent } from './chart/energychart/energychart.component'
   ],
   declarations: [
     HistoryComponent,
-    EnergyChartComponent,
+    EnergyChartComponent
   ]
 })
 export class HistoryModule { }

@@ -71,6 +71,10 @@ export class EnergyChartComponent implements OnChanges {
     // Storage Discharge
     backgroundColor: 'rgba(200,0,0,0.1)',
     borderColor: 'rgba(200,0,0,1)',
+  }, {
+    // EVCS
+    backgroundColor: 'rgba(200,0,0,0.1)',
+    borderColor: 'rgba(200,0,0,1)',
   }];
   private options: ChartOptions;
 
@@ -109,7 +113,8 @@ export class EnergyChartComponent implements OnChanges {
         gridSell: [],
         consumption: [],
         storageCharge: [],
-        storageDischarge: []
+        storageDischarge: [],
+        energySession: []
       }
       let labels: Date[] = [];
       for (let record of historicData.data) {
@@ -126,6 +131,7 @@ export class EnergyChartComponent implements OnChanges {
         activePowers.consumption.push(Utils.divideSafely(data.summary.consumption.activePower, 1000)); // convert to kW
         activePowers.storageCharge.push(Utils.divideSafely(data.summary.storage.chargeActivePower, 1000)); // convert to kW
         activePowers.storageDischarge.push(Utils.divideSafely(data.summary.storage.dischargeActivePower, 1000)); // convert to kW
+        activePowers.energySession.push(Utils.divideSafely(data.summary.evcs.energySession, 1000)); // convert to kW
       }
       this.datasets = [{
         label: this.translate.instant('General.Production'),
@@ -150,6 +156,10 @@ export class EnergyChartComponent implements OnChanges {
       }, {
         label: this.translate.instant('General.DischargePower'),
         data: activePowers.storageDischarge,
+        hidden: true
+      }, {
+        label: 'EVCS',
+        data: activePowers.energySession,
         hidden: true
       }];
       this.labels = labels;

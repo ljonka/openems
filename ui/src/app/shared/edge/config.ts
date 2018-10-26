@@ -5,6 +5,7 @@ import { Widget } from '../type/widget';
 export abstract class ConfigImpl implements DefaultTypes.Config {
 
     public esss: string[] = [];
+    public evcsDevices: string[] = [];
     public chargers: string[] = [];
 
     public meta: {
@@ -30,6 +31,8 @@ export abstract class ConfigImpl implements DefaultTypes.Config {
     public abstract getEssSocChannels(): DefaultTypes.ChannelAddresses;
 
     public abstract getPowerChannels(): DefaultTypes.ChannelAddresses;
+
+    public abstract getEvcsWidgetChannels(): DefaultTypes.ChannelAddresses;
 
     public abstract getWidgets(): Widget[];
 

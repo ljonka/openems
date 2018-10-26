@@ -104,7 +104,7 @@ export class ConfigImpl_2018_8 extends ConfigImpl implements DefaultTypes.Config
     /**
      * Returns ChannelAddresses required by EVCS widget 
      */
-    private getEvcsWidgetChannels(): DefaultTypes.ChannelAddresses {
+    public getEvcsWidgetChannels(): DefaultTypes.ChannelAddresses {
         let result: DefaultTypes.ChannelAddresses = {}
         for (let thingId of this.evcsDevices) {
             result[thingId] = ["State", "Plug", "CurrUser", "ActualPower", "EnergySession", "EnergyTotal"];
