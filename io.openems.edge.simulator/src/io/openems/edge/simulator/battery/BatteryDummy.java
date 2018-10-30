@@ -33,7 +33,12 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 	private int chargeMaxVoltage;
 	private int disChargeMaxCurrent;
 	private int chargeMaxCurrent;
-	private int SOC;
+	private int soc;
+	private int soh;
+	private int temperature;
+	private int capacityKWh;
+	private int voltage;
+	private int minCellVoltage_mV;
 
 	public BatteryDummy() {
 		Utils.initializeChannels(this).forEach(channel -> this.addChannel(channel));
@@ -46,7 +51,12 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 		chargeMaxVoltage = config.chargeMaxVoltage();
 		disChargeMaxCurrent = config.disChargeMaxCurrent();
 		chargeMaxCurrent = config.chargeMaxCurrent();
-		SOC = config.SOC();
+		soc = config.soc();
+		soh = config.soh();
+		temperature = config.temperature();
+		capacityKWh = config.capacityKWh();
+		voltage = config.voltage();
+		minCellVoltage_mV = config.minCellVoltage_mV();
 	}
 
 	@Override
@@ -64,19 +74,29 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 		IntegerWriteChannel disChargeMaxCurrentChannel = this.channel(Battery.ChannelId.DISCHARGE_MAX_CURRENT);
 		IntegerWriteChannel chargeMaxCurrentChannel = this.channel(Battery.ChannelId.CHARGE_MAX_CURRENT);
 		IntegerWriteChannel socChannel = this.channel(Battery.ChannelId.SOC);
+		IntegerWriteChannel sohChannel = this.channel(Battery.ChannelId.SOH);
+		IntegerWriteChannel tempChannel = this.channel(Battery.ChannelId.BATTERY_TEMP);
+		IntegerWriteChannel capacityChannel = this.channel(Battery.ChannelId.CAPACITY_KWH);
+		IntegerWriteChannel voltageChannel = this.channel(Battery.ChannelId.VOLTAGE);
+		IntegerWriteChannel minCellVoltageChannel = this.channel(Battery.ChannelId.MINIMAL_CELL_VOLTAGE);
 
 		try {
 			disChargeMinVoltageChannel.setNextWriteValue(disChargeMinVoltage);
 			chargeMaxVoltageChannel.setNextWriteValue(chargeMaxVoltage);
 			disChargeMaxCurrentChannel.setNextWriteValue(disChargeMaxCurrent);
 			chargeMaxCurrentChannel.setNextWriteValue(chargeMaxCurrent);
-			socChannel.setNextWriteValue(SOC);
-			
+			socChannel.setNextValue(soc);
+			sohChannel.setNextValue(soh);
+			tempChannel.setNextValue(temperature);
+			capacityChannel.setNextWriteValue(capacityKWh);
+		
 			disChargeMinVoltageChannel.setNextValue(disChargeMinVoltage);
 			chargeMaxVoltageChannel.setNextValue(chargeMaxVoltage);
 			disChargeMaxCurrentChannel.setNextValue(disChargeMaxCurrent);
 			chargeMaxCurrentChannel.setNextValue(chargeMaxCurrent);
-			socChannel.setNextValue(SOC);
+			
+			voltageChannel.setNextValue(voltage);
+			minCellVoltageChannel.setNextValue(minCellVoltage_mV);
 
 		} catch (OpenemsException e) {
 			log.error("Error occurred while writing channel values! " + e.getMessage());

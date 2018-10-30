@@ -3,7 +3,6 @@ package io.openems.edge.controller.ess.limittotaldischarge;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-import org.apache.commons.math3.optim.linear.Relationship;
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
@@ -25,9 +24,10 @@ import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.controller.api.Controller;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
-import io.openems.edge.ess.power.api.ConstraintType;
 import io.openems.edge.ess.power.api.Phase;
+import io.openems.edge.ess.power.api.PowerException;
 import io.openems.edge.ess.power.api.Pwr;
+import io.openems.edge.ess.power.api.Relationship;
 
 @Designate(ocd = Config.class, factory = true)
 @Component( //
@@ -125,14 +125,16 @@ public class LimitTotalDischargeController extends AbstractOpenemsComponent impl
 
 	@Override
 	public void run() {
-		Optional<Integer> socOpt = this.ess.getSoc().value().asOptional();
-
 		// Set to normal state and return if SoC is not available
+		Optional<Integer> socOpt = this.ess.getSoc().value().asOptional();
 		if (!socOpt.isPresent()) {
 			this.state = State.NORMAL;
 			return;
 		}
 		int soc = socOpt.get();
+
+		// initialize force Charge
+		Optional<Integer> calculatedPower = Optional.empty();
 
 		State nextState = this.state;
 		switch (this.state) {
@@ -140,6 +142,8 @@ public class LimitTotalDischargeController extends AbstractOpenemsComponent impl
 			/*
 			 * Normal State
 			 */
+			// no constraints in normal operation mode
+
 			if (soc <= this.forceChargeSoc) {
 				nextState = State.FORCE_CHARGE_SOC;
 				break;
@@ -147,12 +151,15 @@ public class LimitTotalDischargeController extends AbstractOpenemsComponent impl
 				nextState = State.MIN_SOC;
 				break;
 			}
-			// no constraints in normal operation mode
 			break;
+
 		case MIN_SOC:
 			/*
 			 * Min-SoC State
 			 */
+			// Deny further discharging: set Constraint for ActivePower <= 0
+			calculatedPower = Optional.of(0);
+
 			if (soc <= this.forceChargeSoc) {
 				nextState = State.FORCE_CHARGE_SOC;
 				break;
@@ -161,25 +168,31 @@ public class LimitTotalDischargeController extends AbstractOpenemsComponent impl
 				nextState = State.NORMAL;
 				break;
 			}
-			// Deny further discharging: set Constraint for ActivePower <= 0
-			this.ess.addPowerConstraint(ConstraintType.CYCLE, Phase.ALL, Pwr.ACTIVE, Relationship.LEQ, 0);
 			break;
+
 		case FORCE_CHARGE_SOC:
 			/*
 			 * Force-Charge-SoC State
 			 */
+			// Force charge: set Constraint for ActivePower
+			int maxCharge = this.ess.getPower().getMinPower(ess, Phase.ALL, Pwr.ACTIVE);
+            calculatedPower = Optional.of(maxCharge / 5);
+
 			if (soc > this.forceChargeSoc) {
 				nextState = State.MIN_SOC;
 				break;
 			}
-			if (soc > this.minSoc) {
-				nextState = State.NORMAL;
-				break;
-			}
-			// Force charge: set Constraint for ActivePower <= MAX_CHARGE / 5
-			int chargePower = this.ess.getPower().getMinActivePower() / 5;
-			this.ess.addPowerConstraint(ConstraintType.CYCLE, Phase.ALL, Pwr.ACTIVE, Relationship.LEQ, chargePower);
 			break;
+		}
+
+		// Apply Force-Charge if it was set
+		if (calculatedPower.isPresent()) {
+			try {
+				this.ess.addPowerConstraintAndValidate("LimitTotalDischarge", Phase.ALL, Pwr.ACTIVE,
+						Relationship.LESS_OR_EQUALS, calculatedPower.get());
+			} catch (PowerException e) {
+				this.logError(this.log, e.getMessage());
+			}
 		}
 
 		/*

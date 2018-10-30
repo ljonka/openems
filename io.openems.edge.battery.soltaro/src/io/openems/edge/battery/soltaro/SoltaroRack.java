@@ -30,16 +30,15 @@ import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
-import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
-import io.openems.edge.common.channel.StateChannel;
 import io.openems.edge.common.channel.doc.Doc;
 import io.openems.edge.common.channel.doc.Level;
 import io.openems.edge.common.channel.doc.OptionsEnum;
 import io.openems.edge.common.channel.doc.Unit;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
+import io.openems.edge.common.taskmanager.Priority;
 
 @Designate(ocd = Config.class, factory = true)
 @Component( //
@@ -61,10 +60,12 @@ public class SoltaroRack extends AbstractOpenemsModbusComponent implements Batte
 	
 	private static final int SECURITY_INTERVAL_FOR_COMMANDS_IN_SECONDS = 3;
 	private static final int MAX_TIME_FOR_INITIALIZATION_IN_SECONDS = 30;
+	public static final Integer CAPACITY_KWH = 50;
 	
 	private final Logger log = LoggerFactory.getLogger(SoltaroRack.class);
 	
 	private String modbusBridgeId;
+	private BatteryState batteryState;
 
 	@Reference
 	protected ConfigurationAdmin cm;
@@ -88,7 +89,8 @@ public class SoltaroRack extends AbstractOpenemsModbusComponent implements Batte
 				config.modbus_id());
 		this.modbusBridgeId = config.modbus_id();
 		
-		initializeContactControlCallback();
+		this.batteryState = config.batteryState();
+		initializeCallbacks();
 	}
 	
 	@Deactivate
@@ -96,7 +98,7 @@ public class SoltaroRack extends AbstractOpenemsModbusComponent implements Batte
 		super.deactivate();
 	}
 
-	private void initializeContactControlCallback() {
+	private void initializeCallbacks() {
 		this.channel(ChannelId.BMS_CONTACTOR_CONTROL).onChange(value -> {
 			Optional<Enum<?>> ccOpt = value.asEnumOptional();
 			if (!ccOpt.isPresent()) {
@@ -123,6 +125,26 @@ public class SoltaroRack extends AbstractOpenemsModbusComponent implements Batte
 				break;			
 			}			
 		});
+		
+		this.channel(ChannelId.CLUSTER_1_VOLTAGE).onChange(value -> {
+			@SuppressWarnings("unchecked")
+			Optional<Integer> vOpt = (Optional<Integer>) value.asOptional();
+			if (!vOpt.isPresent()) {
+				return;
+			}
+			int voltage_millivolt = vOpt.get();
+			this.channel(Battery.ChannelId.VOLTAGE).setNextValue(voltage_millivolt * 1000);
+		});
+		
+		this.channel(ChannelId.CLUSTER_1_MIN_CELL_VOLTAGE).onChange(value -> {
+			@SuppressWarnings("unchecked")
+			Optional<Integer> vOpt = (Optional<Integer>) value.asOptional();
+			if (!vOpt.isPresent()) {
+				return;
+			}
+			int voltage_millivolt = vOpt.get();
+			this.channel(Battery.ChannelId.MINIMAL_CELL_VOLTAGE).setNextValue(voltage_millivolt);
+		});
 	}
 	
 	@Override
@@ -133,18 +155,33 @@ public class SoltaroRack extends AbstractOpenemsModbusComponent implements Batte
 		switch (event.getTopic()) {
 
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-			checkSystemState();
+			handleBatteryState();			
 			break;
 		}
 	}
 
-	private void checkSystemState() {
+	private void handleBatteryState() {
 		// Avoid that commands are written to fast to the battery rack
 		if (lastCommandSent.plusSeconds(SECURITY_INTERVAL_FOR_COMMANDS_IN_SECONDS).isAfter(LocalDateTime.now())) {
 			return;
 		} else {
 			lastCommandSent = LocalDateTime.now();
 		}
+		
+		switch (this.batteryState) {
+		case DEFAULT:
+			checkSystemState();
+			break;
+		case OFF:
+			stopSystem();
+			break;
+		case ON:
+			startSystem();
+			break;
+		}
+	}
+
+	private void checkSystemState() {
 		
 		IntegerReadChannel contactorControlChannel = this.channel(ChannelId.BMS_CONTACTOR_CONTROL);
 
@@ -170,12 +207,7 @@ public class SoltaroRack extends AbstractOpenemsModbusComponent implements Batte
 		}
 
 		if (cc == ContactorControl.ON_GRID) {
-			// Currently there is no error handling or prevention is system gets too hot or s.th. else 
-//			if (checkForFault()) {
-//				handleFaults();
-//			} else {
-//				doNormalProcessing();
-//			}
+			// TODO: Implement error handling or prevention on system temperature errors/ low voltage/...
 		}
 	}
 
@@ -636,8 +668,8 @@ public class SoltaroRack extends AbstractOpenemsModbusComponent implements Batte
 	}
 
 	@Override
-	protected ModbusProtocol defineModbusProtocol(int unitId) {
-		return new ModbusProtocol(unitId, //
+	protected ModbusProtocol defineModbusProtocol() {
+		return new ModbusProtocol(this, //
 				new FC6WriteRegisterTask(0x2010,  //
 						m(SoltaroRack.ChannelId.BMS_CONTACTOR_CONTROL, new UnsignedWordElement(0x2010)) //
 				) , //
@@ -1051,108 +1083,5 @@ public class SoltaroRack extends AbstractOpenemsModbusComponent implements Batte
 		} catch (OpenemsException e) {
 			log.error("Error while trying to stop system\n" + e.getMessage());
 		}
-	}
-
-	private void doNormalProcessing() {
-		// Try to react on possible errors
-		if (isStateValueInChannelSet(ChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_HIGH)) {
-			handleCellVoltageHigh();
-		}
-		if (isStateValueInChannelSet(ChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_HIGH)) {
-			handleTotalVoltageHigh();
-		}
-		if (isStateValueInChannelSet(ChannelId.ALARM_LEVEL_2_CHA_CURRENT_HIGH)) {
-			handleChargeCurrentHigh();
-		}
-		if (isStateValueInChannelSet(ChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_LOW)) {
-			handleCellVoltageLow();
-		}
-		if (isStateValueInChannelSet(ChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_LOW)) {
-			handleTotalVoltageLow();
-		}
-		if (isStateValueInChannelSet(ChannelId.ALARM_LEVEL_2_DISCHA_CURRENT_HIGH)) {
-			handleDischargeCurrentHigh();
-		}
-		if (isStateValueInChannelSet(ChannelId.ALARM_LEVEL_2_CELL_CHA_TEMP_HIGH)) {
-			handleCellChargeTemperatureHigh();
-		}
-		if (isStateValueInChannelSet(ChannelId.ALARM_LEVEL_2_CELL_CHA_TEMP_LOW)) {
-			handleCellChargeTemperatureLow();
-		}
-		if (isStateValueInChannelSet(ChannelId.ALARM_LEVEL_2_INSULATION_LOW)) {
-			handleInsulationLow();
-		}
-		if (isStateValueInChannelSet(ChannelId.ALARM_LEVEL_2_CELL_DISCHA_TEMP_HIGH)) {
-			handleCellDischargeTemperatureHigh();
-		}
-		if (isStateValueInChannelSet(ChannelId.ALARM_LEVEL_2_CELL_DISCHA_TEMP_LOW)) {
-			handleCellDischargeTemperatureLow();
-		}
-	}
-
-	private void handleFaults() {
-		Optional<Integer> state = getState().getNextValue().asOptional();
-		if (!state.isPresent()) {
-			return;
-		}
-		switch (state.get()) {
-		case 0: // SAMPLING_WIRE
-		case 1:// CONNECTOR_WIRE
-		case 2:// LTC6803
-		case 3:// VOLTAGE_SAMPLING
-		case 4:// TEMP_SAMPLING
-		case 5:// TEMP_SENSOR
-		case 8:// BALANCING_MODULE
-		case 9:// TEMP_SAMPLING_LINE
-		case 10:// INTRANET_COMMUNICATION
-		case 11:// EEPROM
-		case 12:// INITIALIZATION
-			stopSystem();
-			break;
-		}
-	}
-
-	private boolean checkForFault() {
-		Optional<Integer> state = getState().value().asOptional();
-		return (state.isPresent() && state.get() != 0);
-	}
-
-	private boolean isStateValueInChannelSet(ChannelId channelId) {
-		StateChannel channel = this.channel(channelId);
-		Optional<Boolean> valueOpt = channel.value().asOptional();
-		return valueOpt.isPresent() && valueOpt.get();
-	}
-
-	private void handleCellDischargeTemperatureLow() {
-	}
-
-	private void handleCellDischargeTemperatureHigh() {
-	}
-
-	private void handleInsulationLow() {
-	}
-
-	private void handleCellChargeTemperatureLow() {
-	}
-
-	private void handleCellChargeTemperatureHigh() {
-	}
-
-	private void handleDischargeCurrentHigh() {
-	}
-
-	private void handleTotalVoltageLow() {
-	}
-
-	private void handleCellVoltageLow() {
-	}
-
-	private void handleChargeCurrentHigh() {
-	}
-
-	private void handleTotalVoltageHigh() {
-	}
-
-	private void handleCellVoltageHigh() {
 	}
 }

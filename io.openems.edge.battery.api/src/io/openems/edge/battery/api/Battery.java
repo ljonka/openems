@@ -11,7 +11,6 @@ import io.openems.edge.common.component.OpenemsComponent;
 @ProviderType
 public interface Battery extends OpenemsComponent {
 
-	// TODO State of Health, Temperature?
 	public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 		/**
 		 * State of Charge
@@ -24,6 +23,27 @@ public interface Battery extends OpenemsComponent {
 		 * </ul>
 		 */
 		SOC(new Doc().type(OpenemsType.INTEGER).unit(Unit.PERCENT)),
+		/**
+		 * State of Health
+		 *
+		 * <ul>
+		 * <li>Interface: Battery
+		 * <li>Type: Integer
+		 * <li>Unit: %
+		 * <li>Range: 0..100
+		 * </ul>
+		 */
+		SOH(new Doc().type(OpenemsType.INTEGER).unit(Unit.PERCENT)),
+		/**
+		 * Max capacity
+		 *
+		 * <ul>
+		 * <li>Interface: Battery
+		 * <li>Type: Integer
+		 * <li>Unit: Wh
+		 * </ul>
+		 */
+		MAX_CAPACITY(new Doc().type(OpenemsType.INTEGER).unit(Unit.WATT_HOURS)),
 		/**
 		 * Min voltage for discharging
 		 * 
@@ -65,6 +85,17 @@ public interface Battery extends OpenemsComponent {
 		 */
 		CHARGE_MAX_CURRENT(new Doc().type(OpenemsType.INTEGER).unit(Unit.AMPERE)),
 		/**
+		 * Battery Temperature
+		 *
+		 * <ul>
+		 * <li>Interface: Battery
+		 * <li>Type: Integer
+		 * <li>Unit: Celsius
+		 * <li>Range: (-50)..100
+		 * </ul>
+		 */
+		BATTERY_TEMP(new Doc().type(OpenemsType.INTEGER).unit(Unit.DEGREE_CELSIUS)),
+		/**
 		 * Indicates that the battery has started and is ready for charging/discharging
 		 * 
 		 * <ul>
@@ -73,6 +104,36 @@ public interface Battery extends OpenemsComponent {
 		 * </ul>
 		 */
 		READY_FOR_WORKING(new Doc().type(OpenemsType.BOOLEAN)),
+		
+		/**
+		 * Capacity of battery
+		 * 
+		 * <ul>
+		 * <li>Interface: Battery
+		 * <li>Type: Integer
+		 * </ul>
+		 */
+		CAPACITY_KWH(new Doc().type(OpenemsType.INTEGER).unit(Unit.KILOWATT_HOURS)),
+		
+		/**
+		 * Voltage of battery
+		 * 
+		 * <ul>
+		 * <li>Interface: Battery
+		 * <li>Type: Integer
+		 * </ul>
+		 */
+		VOLTAGE(new Doc().type(OpenemsType.INTEGER).unit(Unit.VOLT)),
+		
+		/**
+		 * Minimal cell voltage
+		 * 
+		 * <ul>
+		 * <li>Interface: Battery
+		 * <li>Type: Integer
+		 * </ul>
+		 */
+		MINIMAL_CELL_VOLTAGE(new Doc().type(OpenemsType.INTEGER).unit(Unit.MILLIVOLT)),
 		;
 
 		private final Doc doc;
@@ -94,6 +155,33 @@ public interface Battery extends OpenemsComponent {
 	 */
 	default Channel<Integer> getSoc() {
 		return this.channel(ChannelId.SOC);
+	}
+
+	/**
+	 * Gets the State of Health in [%], range 0..100 %
+	 *
+	 * @return
+	 */
+	default Channel<Integer> getSoh() {
+		return this.channel(ChannelId.SOH);
+	}
+
+	/**
+	 * Gets the maximum capacity
+	 *
+	 * @return
+	 */
+	default Channel<Integer> getMaxCapacity() {
+		return this.channel(ChannelId.MAX_CAPACITY);
+	}
+
+	/**
+	 * Gets the Battery Temperature in [degC], range (-50)..100
+	 *
+	 * @return
+	 */
+	default Channel<Integer> getBatteryTemp() {
+		return this.channel(ChannelId.BATTERY_TEMP);
 	}
 
 	/**
@@ -139,5 +227,32 @@ public interface Battery extends OpenemsComponent {
 	 */
 	default Channel<Boolean> getReadyForWorking() {
 		return this.channel(ChannelId.READY_FOR_WORKING);
+	}
+	
+	/**
+	 * Gets the capacity of this battery
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getCapacity() {
+		return this.channel(ChannelId.CAPACITY_KWH);
+	}
+	
+	/**
+	 * Gets the total voltage of this battery system
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getVoltage() {
+		return this.channel(ChannelId.VOLTAGE);
+	}
+	
+	/**
+	 * Gets the minimal cell voltage of this battery
+	 * 
+	 * @return
+	 */
+	default Channel<Integer> getMinimalCellVoltage() {
+		return this.channel(ChannelId.MINIMAL_CELL_VOLTAGE);
 	}
 }
