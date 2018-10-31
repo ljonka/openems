@@ -31,7 +31,6 @@ public class Utils {
 					case REACTIVE_POWER:
 					case ACTIVE_CHARGE_ENERGY: // TODO ACTIVE_CHARGE_ENERGY
 					case ACTIVE_DISCHARGE_ENERGY: // TODO ACTIVE_DISCHARGE_ENERGY
-					case MAX_ACTIVE_POWER:
 					case GRID_MODE:
 						return new IntegerReadChannel(ess, channelId);
 					}
@@ -40,7 +39,10 @@ public class Utils {
 					switch (channelId) {
 					case DEBUG_SET_ACTIVE_POWER:
 					case DEBUG_SET_REACTIVE_POWER:
+					case ALLOWED_CHARGE_POWER:
+					case ALLOWED_DISCHARGE_POWER:	
 						return new IntegerReadChannel(ess, channelId);
+					
 					}
 					return null;
 				}), Arrays.stream(EssSinexcel.ChannelId.values()).map(channelId -> {
@@ -108,7 +110,7 @@ public class Utils {
 					case Upper_Voltage_Limit:
 					case Target_Active_Power:
 					case Target_Reactive_Power:
-
+					case DEBUG_EN_LIMIT:
 		
 						return new IntegerReadChannel(ess, channelId);
 					case SETDATA_MOD_ON_CMD:
@@ -124,6 +126,14 @@ public class Utils {
 					case SET_FLOAT_CHARGE_VOLTAGE:
 					case SET_UPPER_VOLTAGE:
 					case SET_LOWER_VOLTAGE:
+					case BAT_TEMP:
+					case BAT_SOC:
+					case BAT_SOH:
+					case CHA_MAX_A:
+					case CHA_MAX_V:
+					case DIS_MAX_A:
+					case DIS_MIN_V:
+					case EN_LIMIT:
 						return new IntegerWriteChannel(ess, channelId);
 						
 					case Serial:
@@ -223,6 +233,9 @@ public class Utils {
 					case STATE_73:
 					case STATE_74:
 						return new StateChannel(ess, channelId);
+					
+					
+					
 					
 						
 					}

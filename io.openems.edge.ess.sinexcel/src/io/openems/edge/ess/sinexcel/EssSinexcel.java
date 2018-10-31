@@ -19,7 +19,9 @@ import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+
 import io.openems.common.exceptions.OpenemsException;
+import io.openems.edge.battery.api.Battery;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
 import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
@@ -32,6 +34,7 @@ import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.StateChannel;
+import io.openems.edge.common.channel.WriteChannel;
 import io.openems.edge.common.channel.doc.Doc;
 import io.openems.edge.common.channel.doc.Level;
 import io.openems.edge.common.channel.doc.Unit;
@@ -40,7 +43,6 @@ import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.api.SymmetricEss;
-import io.openems.edge.ess.power.api.CircleConstraint;
 import io.openems.edge.ess.power.api.Power;
 
 
@@ -65,9 +67,16 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	void activate(ComponentContext context, Config config) {
 		super.activate(context, config.service_pid(), config.id(), config.enabled(), DEFAULT_UNIT_ID, this.cm, "Modbus",
 				config.modbus_id());
-
+		if (OpenemsComponent.updateReferenceFilter(this.cm, config.service_pid(), "battery", config.battery_id())) {
+			return;
+		}
 	}
 
+	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
+	protected void setBattery(Battery battery) {
+		this.battery = battery;
+	}
+	
 	@Deactivate
 	protected void deactivate() {
 		super.deactivate();
@@ -104,6 +113,21 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		SET_UPPER_VOLTAGE(new Doc().unit(Unit.VOLT)),
 		SET_LOWER_VOLTAGE(new Doc().unit(Unit.VOLT)),
 
+		BAT_TEMP(new Doc().unit(Unit.DEGREE_CELSIUS)),
+		BAT_SOC(new Doc().unit(Unit.PERCENT)),
+		BAT_SOH(new Doc().unit(Unit.PERCENT)),
+		DIS_MIN_V(new Doc().unit(Unit.VOLT)),
+		DIS_MAX_A(new Doc().unit(Unit.AMPERE)),
+		CHA_MAX_A(new Doc().unit(Unit.AMPERE)),
+		CHA_MAX_V(new Doc().unit(Unit.VOLT)),
+		DEBUG_EN_LIMIT(new Doc()),
+		EN_LIMIT(new Doc().text("new battery limits are activated when EnLimit is 1") //
+				.onInit(channel -> { //
+					// on each setNextWrite to the channel -> store the value in the DEBUG-channel
+					((WriteChannel<Integer>) channel).onSetNextWrite(value -> {
+						channel.getComponent().channel(ChannelId.DEBUG_EN_LIMIT).setNextValue(value);
+					});
+				})),
 		
 		ANTI_ISLANDING(new Doc().unit(Unit.ON_OFF)),
 
@@ -377,7 +401,65 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	public void doHandling_CHARGE_DISCHARGE_CURRENT() {
 		SET_CHARGE_DISCHARGE_CURRENT();
 	}
+	private void setBatteryRanges() {
+		if (battery == null) {
+			return;
+		}
+
+		// Read some Channels from Battery
+		int disMinV = battery.getDischargeMinVoltage().value().orElse(0);
+		int chaMaxV = battery.getChargeMaxVoltage().value().orElse(0);
+		int disMaxA = battery.getDischargeMaxCurrent().value().orElse(0);
+		int chaMaxA = battery.getChargeMaxCurrent().value().orElse(0);
+		int batSoC = battery.getSoc().value().orElse(0);
+		int batSoH = battery.getSoh().value().orElse(0);
+		int batTemp = battery.getBatteryTemp().value().orElse(0);
+
+		// Update Power Constraints
+		// TODO: The actual AC allowed charge and discharge should come from the KACO
+		// Blueplanet instead of calculating it from DC parameters.
+		final double EFFICIENCY_FACTOR = 0.9;
+		this.getAllowedCharge().setNextValue(chaMaxA * chaMaxV * -1 * EFFICIENCY_FACTOR);
+		this.getAllowedDischarge().setNextValue(disMaxA * disMinV * EFFICIENCY_FACTOR);
+
+		if (disMinV == 0 || chaMaxV == 0) {
+			return; // according to setup manual 64202.DisMinV and 64202.ChaMaxV must not be zero
+		}
+
+		// Set Battery values to inverter
+		try {
+			this.getDischargeMinVoltageChannel().setNextWriteValue(disMinV);
+			this.getChargeMaxVoltageChannel().setNextWriteValue(chaMaxV);
+			this.getDischargeMaxAmpereChannel().setNextWriteValue(disMaxA);
+			this.getChargeMaxAmpereChannel().setNextWriteValue(chaMaxA);
+			this.getEnLimitChannel().setNextWriteValue(1);
+
+			// battery stats to display on inverter
+			this.getBatterySocChannel().setNextWriteValue(batSoC);
+			this.getBatterySohChannel().setNextWriteValue(batSoH);
+			this.getBatteryTempChannel().setNextWriteValue(batTemp);
+		} catch (OpenemsException e) {
+			log.error("Error during setBatteryRanges, " + e.getMessage());
+		}
+	}
 	
+	private void doChannelMapping() {
+		this.battery.getSoc().onChange(value -> {
+			this.getSoc().setNextValue(value.get());
+			this.channel(ChannelId.BAT_SOC).setNextValue(value.get());
+			this.channel(SymmetricEss.ChannelId.SOC).setNextValue(value.get());
+		});
+
+		this.battery.getSoh().onChange(value -> {
+			this.getSoc().setNextValue(value.get());
+			this.channel(ChannelId.BAT_SOH).setNextValue(value.get());
+		});
+
+		this.battery.getBatteryTemp().onChange(value -> {
+			this.getSoc().setNextValue(value.get());
+			this.channel(ChannelId.BAT_TEMP).setNextValue(value.get());
+		});
+	}
 	
 //---------------------------------------------SET UPPER/LOWER BATTERY VOLTAGE --------------------------------------------	
 	public void SET_UPPER_LOWER_BATTERY_VOLTAGE() {
@@ -412,8 +494,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	
 //------------------------------------------------------------------------------------------------------------------	
 	
-	protected ModbusProtocol defineModbusProtocol(int unitId) {
-		return new ModbusProtocol(unitId, //
+	protected ModbusProtocol defineModbusProtocol() {
+		return new ModbusProtocol(this, //
 //------------------------------------------------------------WRITE-----------------------------------------------------------
 				new FC6WriteRegisterTask(0x028A, 
 						m(EssSinexcel.ChannelId.SETDATA_MOD_ON_CMD, new UnsignedWordElement(0x028A))), // Start// SETDATA_ModOnCmd				
@@ -764,7 +846,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	}
 //------------------------------------------------------------------------------------------------------------------------
 	private void LIMITS() {					//Watch KACO initialize
-		this.maxApparentPowerConstraint = new CircleConstraint(this, 30000);
+		maxApparentPower = 30000;
 		doHandling_UPPER_LOWER_VOLTAGE();
 		doHandling_CHARGE_DISCHARGE_CURRENT();
 		
@@ -778,7 +860,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		IntegerWriteChannel SET_REACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_REACTIVE);
 		
 		int reactiveValue = (int)((reactivePower/100));
-		if((reactiveValue < MAX_REACTIVE_POWER) && (reactiveValue > (MAX_REACTIVE_POWER*(-1)))) {
+		if((reactiveValue < MAX_REACTIVE_POWER) && (reactiveValue > (MAX_REACTIVE_POWER*(-1))) && (battery.getReadyForWorking().value().orElse(false))) {
 			try {
 				SET_REACTIVE_POWER.setNextWriteValue(reactiveValue);
 			}
@@ -788,12 +870,12 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		}
 		else {
 			reactiveValue = 0;
-			log.error("Reactive power limit exceeded");
+			log.error("Reactive power limit exceeded or battery system is not ready");
 		}
 		
 		
 		int activeValue = (int) ((activePower/100));
-		if((activeValue < MAX_ACTIVE_POWER) && (activeValue > (MAX_ACTIVE_POWER*(-1)))) {
+		if((activeValue < MAX_ACTIVE_POWER) && (activeValue > (MAX_ACTIVE_POWER*(-1))) && (battery.getReadyForWorking().value().orElse(false))) {
 			try {
 				SET_ACTIVE_POWER.setNextWriteValue(activeValue);
 			}
@@ -803,7 +885,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		}
 		else {
 			activeValue = 0;
-			log.error("active power limit exceeded");
+			log.error("active power limit exceeded or battery system is not ready");
 		}
 		
 	}
@@ -816,7 +898,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	
 	@Reference
 	private Power power;
-	private CircleConstraint maxApparentPowerConstraint = null;
+	public int maxApparentPower;
+	
+	private Battery battery;
 	
 	private int MAX_REACTIVE_POWER = 300;	// 30 kW
 	private int MAX_ACTIVE_POWER = 300;	// 30 kW
@@ -826,7 +910,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private int START = 1;
 	private int STOP = 1;
 	
-	private int SLOW_CHARGE_VOLTAGE = 3800;		// Slow and Float Charge Voltage must be the same for the Lithium Ion battery. 
+	private int SLOW_CHARGE_VOLTAGE = 3800;			// Slow and Float Charge Voltage must be the same for the Lithium Ion battery. 
 	private int FLOAT_CHARGE_VOLTAGE = 3800;		
 	
 	private int LOWER_BAT_VOLTAGE = 3000;
@@ -850,7 +934,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
 			doHandling_ON();
 			LIMITS();
-			
+			setBatteryRanges();
 //			if(island = true) {
 //				doHandling_ISLANDING_ON();
 //			}
@@ -871,6 +955,36 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	public int getPowerPrecision() {
 		return (int) (MAX_ACTIVE_POWER*0.02);
 	}
-	
+	private IntegerWriteChannel getDischargeMinVoltageChannel() {
+		return this.channel(ChannelId.DIS_MIN_V);
+	}
+
+	private IntegerWriteChannel getDischargeMaxAmpereChannel() {
+		return this.channel(ChannelId.DIS_MAX_A);
+	}
+
+	private IntegerWriteChannel getChargeMaxVoltageChannel() {
+		return this.channel(ChannelId.CHA_MAX_V);
+	}
+
+	private IntegerWriteChannel getChargeMaxAmpereChannel() {
+		return this.channel(ChannelId.CHA_MAX_A);
+	}
+
+	private IntegerWriteChannel getEnLimitChannel() {
+		return this.channel(ChannelId.EN_LIMIT);
+	}
+
+	private IntegerWriteChannel getBatterySocChannel() {
+		return this.channel(ChannelId.BAT_SOC);
+	}
+
+	private IntegerWriteChannel getBatterySohChannel() {
+		return this.channel(ChannelId.BAT_SOH);
+	}
+
+	private IntegerWriteChannel getBatteryTempChannel() {
+		return this.channel(ChannelId.BAT_TEMP);
+	}
 
 }
