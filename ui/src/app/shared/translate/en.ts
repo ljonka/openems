@@ -30,7 +30,7 @@ export const TRANSLATION = {
     },
     Menu: {
         Index: "Index",
-        AboutUI: "About FEMS-UI",
+        AboutUI: "About OpenEMS UI",
         Settings: 'General Settings',
         Logout: 'Sign Out'
     },
@@ -39,7 +39,7 @@ export const TRANSLATION = {
         ConnectionSuccessful: "Successfully connected to {{value}}.", // value = name of websocket
         ConnectionFailed: "Connection to {{value}} failed.", // value = name of websocket
         ToEnergymonitor: "To Energymonitor...",
-        IsOffline: "FEMS is offline!"
+        IsOffline: "OpenEMS is offline!"
     },
     Edge: {
         Index: {
@@ -121,7 +121,7 @@ export const TRANSLATION = {
                 NewScheduler: "New scheduler...",
                 Class: "Class:",
                 NotImplemented: "Form not implemented: ",
-                Contact: "This shouldn't happen. Please contact <a href=\"mailto:{{value}}\">{{value}}</a>.", // value = Mail from FEMS-Team
+                Contact: "This shouldn't happen. Please contact <a href=\"mailto:{{value}}\">{{value}}</a>.",
                 Always: "Always"
             },
             Log: {
@@ -143,14 +143,12 @@ export const TRANSLATION = {
         }
     },
     About: {
-        UI: "User interface for FEMS and OpenEMS",
-        Developed: "This user interface is developed by FENECON as open-source software.",
-        Fenecon: "More about FENECON",
-        Fems: "More about FEMS",
+        UI: "User interface for OpenEMS",
+        Developed: "This user interface is developed as open-source software.",
         OpenEMS: "More about OpenEMS",
         CurrentDevelopments: "Current developments",
         Build: "This build",
-        Contact: "Please contact our FEMS team for further information or suggestions about the system at <a href=\"mailto:{{value}}\">{{value}}</a>.", // value = Mail from FEMS-Team
+        Contact: "Please contact our team for further information or suggestions about the system at <a href=\"mailto:{{value}}\">{{value}}</a>.",
         Language: "Select language:"
     },
     Notifications: {
