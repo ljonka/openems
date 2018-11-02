@@ -25,10 +25,14 @@ import io.openems.edge.common.channel.merger.SumInteger;
 import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.OpenemsComponent;
-import io.openems.edge.ess.api.SymmetricEss;
+import io.openems.edge.common.modbusslave.ModbusSlave;
+import io.openems.edge.common.modbusslave.ModbusSlaveNatureTable;
+import io.openems.edge.common.modbusslave.ModbusSlaveTable;
+import io.openems.edge.common.modbusslave.ModbusType;
 import io.openems.edge.ess.api.SymmetricEss.GridMode;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.api.MetaEss;
+import io.openems.edge.ess.api.SymmetricEss;
 import io.openems.edge.ess.dccharger.api.EssDcCharger;
 import io.openems.edge.meter.api.SymmetricMeter;
 
@@ -36,7 +40,7 @@ import io.openems.edge.meter.api.SymmetricMeter;
  * Enables access to sum/average data.
  */
 @Component(name = "Core.Sum", immediate = true, property = { "id=_sum", "enabled=true" })
-public class Sum extends AbstractOpenemsComponent implements OpenemsComponent {
+public class Sum extends AbstractOpenemsComponent implements OpenemsComponent, ModbusSlave {
 
 	public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 		/**
@@ -64,6 +68,7 @@ public class Sum extends AbstractOpenemsComponent implements OpenemsComponent {
 				.type(OpenemsType.INTEGER) //
 				.unit(Unit.WATT) //
 				.text(ManagedSymmetricEss.POWER_DOC_TEXT)),
+
 		/**
 		 * Grid: Active Power
 		 * 
@@ -212,7 +217,21 @@ public class Sum extends AbstractOpenemsComponent implements OpenemsComponent {
 		CONSUMPTION_MAX_ACTIVE_POWER(new Doc() //
 				.type(OpenemsType.INTEGER) //
 				.unit(Unit.WATT)),
-		
+
+		/**
+		 * Holds the currently maximum possible power. This value is commonly defined by
+		 * the inverter limitations (max apparent power).
+		 * 
+		 * <ul>
+		 * <li>Interface: Managed Symmetric Ess
+		 * <li>Type: Integer
+		 * <li>Unit: W
+		 * <li>Range: zero or positive value
+		 * </ul>
+		 */
+		ESS_MAX_POWER(new Doc() //
+				.type(OpenemsType.INTEGER) //
+				.unit(Unit.WATT)),
 		/**
 		 * Gridmode
 		 * 
@@ -236,12 +255,46 @@ public class Sum extends AbstractOpenemsComponent implements OpenemsComponent {
 		}
 	}
 
+	@Override
+	public ModbusSlaveTable getModbusSlaveTable() {
+		return new ModbusSlaveTable( //
+				OpenemsComponent.getModbusSlaveNatureTable(), //
+				ModbusSlaveNatureTable.of(Sum.class, 220) //
+						.channel(0, ChannelId.ESS_SOC, ModbusType.UINT16) //
+						.channel(1, ChannelId.ESS_ACTIVE_POWER, ModbusType.FLOAT32) //
+						.float32Reserved(3) // ChannelId.ESS_MIN_ACTIVE_POWER
+						.float32Reserved(5) // ChannelId.ESS_MAX_ACTIVE_POWER
+						.float32Reserved(7) // ChannelId.ESS_REACTIVE_POWER
+						.float32Reserved(9) // ChannelId.ESS_MIN_REACTIVE_POWER
+						.float32Reserved(11) // ChannelId.ESS_MAX_REACTIVE_POWER
+						.channel(13, ChannelId.GRID_ACTIVE_POWER, ModbusType.FLOAT32) //
+						.channel(15, ChannelId.GRID_MIN_ACTIVE_POWER, ModbusType.FLOAT32) //
+						.channel(17, ChannelId.GRID_MAX_ACTIVE_POWER, ModbusType.FLOAT32) //
+						.float32Reserved(19) // ChannelId.GRID_REACTIVE_POWER
+						.float32Reserved(21) // ChannelId.GRID_MIN_REACTIVE_POWER
+						.float32Reserved(23) // ChannelId.GRID_MAX_REACTIVE_POWER
+						.channel(25, ChannelId.PRODUCTION_ACTIVE_POWER, ModbusType.FLOAT32) //
+						.channel(27, ChannelId.PRODUCTION_MAX_ACTIVE_POWER, ModbusType.FLOAT32) //
+						.channel(29, ChannelId.PRODUCTION_AC_ACTIVE_POWER, ModbusType.FLOAT32) //
+						.channel(31, ChannelId.PRODUCTION_MAX_AC_ACTIVE_POWER, ModbusType.FLOAT32) //
+						.float32Reserved(33) // ChannelId.PRODUCTION_AC_REACTIVE_POWER
+						.float32Reserved(35) // ChannelId.PRODUCTION_MAX_AC_REACTIVE_POWER
+						.channel(37, ChannelId.PRODUCTION_DC_ACTUAL_POWER, ModbusType.FLOAT32) //
+						.channel(39, ChannelId.PRODUCTION_MAX_DC_ACTUAL_POWER, ModbusType.FLOAT32) //
+						.channel(41, ChannelId.CONSUMPTION_ACTIVE_POWER, ModbusType.FLOAT32) //
+						.channel(43, ChannelId.CONSUMPTION_MAX_ACTIVE_POWER, ModbusType.FLOAT32) //
+						.float32Reserved(45) // ChannelId.CONSUMPTION_REACTIVE_POWER
+						.float32Reserved(47) // ChannelId.CONSUMPTION_MAX_REACTIVE_POWER
+						.build());
+	}
+
 	/*
 	 * Ess
 	 */
 	private final List<SymmetricEss> esss = new CopyOnWriteArrayList<>();
 	private final AverageInteger<SymmetricEss> essSoc;
 	private final SumInteger<SymmetricEss> essActivePower;
+	private final SumInteger<SymmetricEss> essMaxPower;	
 
 	/*
 	 * Grid
@@ -272,7 +325,7 @@ public class Sum extends AbstractOpenemsComponent implements OpenemsComponent {
 		}
 		this.getGridMode().setNextValue(gridMode);
 	};
-	
+
 	/*
 	 * Production
 	 */
@@ -280,7 +333,6 @@ public class Sum extends AbstractOpenemsComponent implements OpenemsComponent {
 	private final SumInteger<SymmetricMeter> productionMaxAcActivePower;
 	private final SumInteger<EssDcCharger> productionDcActualPower;
 	private final SumInteger<EssDcCharger> productionMaxDcActualPower;
-	
 
 	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MULTIPLE)
 	private void addEss(SymmetricEss ess) {
@@ -291,8 +343,10 @@ public class Sum extends AbstractOpenemsComponent implements OpenemsComponent {
 		this.esss.add(ess);
 		this.essSoc.addComponent(ess);
 		this.essActivePower.addComponent(ess);
+		this.essMaxPower.addComponent(ess);
+		
 		this.calculateMaxConsumption.accept(null /* ignored */);
-		ess.getGridMode().onChange(gridModeCalculator );
+		ess.getGridMode().onChange(gridModeCalculator);
 	}
 
 	protected void removeEss(SymmetricEss ess) {
@@ -303,8 +357,10 @@ public class Sum extends AbstractOpenemsComponent implements OpenemsComponent {
 		this.esss.remove(ess);
 		this.essSoc.removeComponent(ess);
 		this.essActivePower.removeComponent(ess);
+		this.essMaxPower.removeComponent(ess);
+		
 		// TODO what happens with the callback added above?!?
-		//ess.getGridMode().onChange(null);
+		// ess.getGridMode().onChange(null);
 	}
 
 	private final Consumer<Value<Integer>> calculateMaxConsumption = ignoreValue -> {
@@ -315,7 +371,7 @@ public class Sum extends AbstractOpenemsComponent implements OpenemsComponent {
 		int grid = this.getGridMaxActivePower().getNextValue().orElse(0);
 		int production = this.getProductionMaxActivePower().getNextValue().orElse(0);
 		int consumption = ess + grid + production;
-		this.getConsumptionMaxActivePower().setNextValue(consumption);		
+		this.getConsumptionMaxActivePower().setNextValue(consumption);
 	};
 
 	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MULTIPLE)
@@ -384,6 +440,8 @@ public class Sum extends AbstractOpenemsComponent implements OpenemsComponent {
 		this.essSoc = new AverageInteger<SymmetricEss>(this, ChannelId.ESS_SOC, SymmetricEss.ChannelId.SOC);
 		this.essActivePower = new SumInteger<SymmetricEss>(this, ChannelId.ESS_ACTIVE_POWER,
 				SymmetricEss.ChannelId.ACTIVE_POWER);
+		this.essMaxPower = new SumInteger<SymmetricEss>(this, ChannelId.ESS_MAX_POWER,
+				SymmetricEss.ChannelId.MAX_APPARENT_POWER);
 		/*
 		 * Grid
 		 */
@@ -433,7 +491,7 @@ public class Sum extends AbstractOpenemsComponent implements OpenemsComponent {
 		};
 		this.getEssActivePower().onSetNextValue(calculateConsumption);
 		this.getGridActivePower().onSetNextValue(calculateConsumption);
-		this.getProductionAcActivePower().onSetNextValue(calculateConsumption);				
+		this.getProductionAcActivePower().onSetNextValue(calculateConsumption);
 	}
 
 	@Activate
@@ -517,6 +575,10 @@ public class Sum extends AbstractOpenemsComponent implements OpenemsComponent {
 		return this.channel(ChannelId.CONSUMPTION_MAX_ACTIVE_POWER);
 	}
 	
+	public Channel<Integer> getEssMaxPower() {
+		return this.channel(ChannelId.ESS_MAX_POWER);
+	}
+
 	public Channel<Integer> getGridMode() {
 		return this.channel(ChannelId.GRID_MODE);
 	}
