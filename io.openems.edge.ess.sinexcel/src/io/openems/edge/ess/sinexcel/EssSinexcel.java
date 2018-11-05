@@ -112,7 +112,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		
 		SET_UPPER_VOLTAGE(new Doc().unit(Unit.VOLT)),
 		SET_LOWER_VOLTAGE(new Doc().unit(Unit.VOLT)),
-
+		
+		BAT_MIN_CELL_VOLTAGE(new Doc().unit(Unit.MILLIVOLT)),
+		BAT_VOLTAGE(new Doc().unit(Unit.VOLT)),
 		BAT_TEMP(new Doc().unit(Unit.DEGREE_CELSIUS)),
 		BAT_SOC(new Doc().unit(Unit.PERCENT)),
 		BAT_SOH(new Doc().unit(Unit.PERCENT)),
@@ -121,6 +123,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		CHA_MAX_A(new Doc().unit(Unit.AMPERE)),
 		CHA_MAX_V(new Doc().unit(Unit.VOLT)),
 		DEBUG_EN_LIMIT(new Doc()),
+		@SuppressWarnings("unchecked")
 		EN_LIMIT(new Doc().text("new battery limits are activated when EnLimit is 1") //
 				.onInit(channel -> { //
 					// on each setNextWrite to the channel -> store the value in the DEBUG-channel
@@ -401,47 +404,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	public void doHandling_CHARGE_DISCHARGE_CURRENT() {
 		SET_CHARGE_DISCHARGE_CURRENT();
 	}
-	private void setBatteryRanges() {
-		if (battery == null) {
-			return;
-		}
-
-		// Read some Channels from Battery
-		int disMinV = battery.getDischargeMinVoltage().value().orElse(0);
-		int chaMaxV = battery.getChargeMaxVoltage().value().orElse(0);
-		int disMaxA = battery.getDischargeMaxCurrent().value().orElse(0);
-		int chaMaxA = battery.getChargeMaxCurrent().value().orElse(0);
-		int batSoC = battery.getSoc().value().orElse(0);
-		int batSoH = battery.getSoh().value().orElse(0);
-		int batTemp = battery.getBatteryTemp().value().orElse(0);
-
-		// Update Power Constraints
-		// TODO: The actual AC allowed charge and discharge should come from the KACO
-		// Blueplanet instead of calculating it from DC parameters.
-		final double EFFICIENCY_FACTOR = 0.9;
-		this.getAllowedCharge().setNextValue(chaMaxA * chaMaxV * -1 * EFFICIENCY_FACTOR);
-		this.getAllowedDischarge().setNextValue(disMaxA * disMinV * EFFICIENCY_FACTOR);
-
-		if (disMinV == 0 || chaMaxV == 0) {
-			return; // according to setup manual 64202.DisMinV and 64202.ChaMaxV must not be zero
-		}
-
-		// Set Battery values to inverter
-		try {
-			this.getDischargeMinVoltageChannel().setNextWriteValue(disMinV);
-			this.getChargeMaxVoltageChannel().setNextWriteValue(chaMaxV);
-			this.getDischargeMaxAmpereChannel().setNextWriteValue(disMaxA);
-			this.getChargeMaxAmpereChannel().setNextWriteValue(chaMaxA);
-			this.getEnLimitChannel().setNextWriteValue(1);
-
-			// battery stats to display on inverter
-			this.getBatterySocChannel().setNextWriteValue(batSoC);
-			this.getBatterySohChannel().setNextWriteValue(batSoH);
-			this.getBatteryTempChannel().setNextWriteValue(batTemp);
-		} catch (OpenemsException e) {
-			log.error("Error during setBatteryRanges, " + e.getMessage());
-		}
-	}
+	
 	
 	private void doChannelMapping() {
 		this.battery.getSoc().onChange(value -> {
@@ -458,6 +421,16 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		this.battery.getBatteryTemp().onChange(value -> {
 			this.getSoc().setNextValue(value.get());
 			this.channel(ChannelId.BAT_TEMP).setNextValue(value.get());
+		});
+		
+		this.battery.getMinimalCellVoltage().onChange(value -> {
+			this.getSoc().setNextValue(value.get());
+			this.channel(ChannelId.BAT_MIN_CELL_VOLTAGE).setNextValue(value.get());
+		});
+		
+		this.battery.getVoltage().onChange(value -> {
+			this.getSoc().setNextValue(value.get());
+			this.channel(ChannelId.BAT_VOLTAGE).setNextValue(value.get());
 		});
 	}
 	
@@ -934,7 +907,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
 			doHandling_ON();
 			LIMITS();
-			setBatteryRanges();
+			doChannelMapping();
 //			if(island = true) {
 //				doHandling_ISLANDING_ON();
 //			}
@@ -955,6 +928,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	public int getPowerPrecision() {
 		return (int) (MAX_ACTIVE_POWER*0.02);
 	}
+	
 	private IntegerWriteChannel getDischargeMinVoltageChannel() {
 		return this.channel(ChannelId.DIS_MIN_V);
 	}
@@ -986,5 +960,12 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private IntegerWriteChannel getBatteryTempChannel() {
 		return this.channel(ChannelId.BAT_TEMP);
 	}
-
+	
+	private IntegerWriteChannel getMinimalCellVoltage() {
+		return this.channel(ChannelId.BAT_MIN_CELL_VOLTAGE);
+	}
+	
+	private IntegerWriteChannel getVoltage() {
+		return this.channel(ChannelId.BAT_VOLTAGE);
+	}
 }

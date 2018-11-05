@@ -32,7 +32,10 @@ public class Utils {
 					case ACTIVE_CHARGE_ENERGY: // TODO ACTIVE_CHARGE_ENERGY
 					case ACTIVE_DISCHARGE_ENERGY: // TODO ACTIVE_DISCHARGE_ENERGY
 					case GRID_MODE:
+					case MAX_APPARENT_POWER:
 						return new IntegerReadChannel(ess, channelId);
+					
+						
 					}
 					return null;
 				}), Arrays.stream(ManagedSymmetricEss.ChannelId.values()).map(channelId -> {
@@ -111,6 +114,8 @@ public class Utils {
 					case Target_Active_Power:
 					case Target_Reactive_Power:
 					case DEBUG_EN_LIMIT:
+					case BAT_MIN_CELL_VOLTAGE:
+					case BAT_VOLTAGE:
 		
 						return new IntegerReadChannel(ess, channelId);
 					case SETDATA_MOD_ON_CMD:
@@ -233,6 +238,7 @@ public class Utils {
 					case STATE_73:
 					case STATE_74:
 						return new StateChannel(ess, channelId);
+					
 					
 					
 					
