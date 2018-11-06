@@ -905,7 +905,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		
 		switch (event.getTopic()) {
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-			doHandling_ON();
+			doHandling_OFF();
 			LIMITS();
 			doChannelMapping();
 //			if(island = true) {
@@ -929,43 +929,43 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		return (int) (MAX_ACTIVE_POWER*0.02);
 	}
 	
-	private IntegerWriteChannel getDischargeMinVoltageChannel() {
+	public IntegerWriteChannel getDischargeMinVoltageChannel() {
 		return this.channel(ChannelId.DIS_MIN_V);
 	}
 
-	private IntegerWriteChannel getDischargeMaxAmpereChannel() {
+	public IntegerWriteChannel getDischargeMaxAmpereChannel() {
 		return this.channel(ChannelId.DIS_MAX_A);
 	}
 
-	private IntegerWriteChannel getChargeMaxVoltageChannel() {
+	public IntegerWriteChannel getChargeMaxVoltageChannel() {
 		return this.channel(ChannelId.CHA_MAX_V);
 	}
 
-	private IntegerWriteChannel getChargeMaxAmpereChannel() {
+	public IntegerWriteChannel getChargeMaxAmpereChannel() {
 		return this.channel(ChannelId.CHA_MAX_A);
 	}
 
-	private IntegerWriteChannel getEnLimitChannel() {
+	public IntegerWriteChannel getEnLimitChannel() {
 		return this.channel(ChannelId.EN_LIMIT);
 	}
 
-	private IntegerWriteChannel getBatterySocChannel() {
+	public IntegerWriteChannel getBatterySocChannel() {
 		return this.channel(ChannelId.BAT_SOC);
 	}
 
-	private IntegerWriteChannel getBatterySohChannel() {
+	public IntegerWriteChannel getBatterySohChannel() {
 		return this.channel(ChannelId.BAT_SOH);
 	}
 
-	private IntegerWriteChannel getBatteryTempChannel() {
+	public IntegerWriteChannel getBatteryTempChannel() {
 		return this.channel(ChannelId.BAT_TEMP);
 	}
 	
-	private IntegerWriteChannel getMinimalCellVoltage() {
+	public IntegerWriteChannel getMinimalCellVoltage() {
 		return this.channel(ChannelId.BAT_MIN_CELL_VOLTAGE);
 	}
 	
-	private IntegerWriteChannel getVoltage() {
+	public IntegerWriteChannel getVoltage() {
 		return this.channel(ChannelId.BAT_VOLTAGE);
 	}
 }
