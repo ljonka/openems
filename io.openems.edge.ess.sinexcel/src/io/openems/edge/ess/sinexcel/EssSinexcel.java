@@ -62,6 +62,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 
 	@Reference
 	protected ConfigurationAdmin cm;
+	
+	@Reference
+	private Power power;
 
 	@Activate
 	void activate(ComponentContext context, Config config) {
@@ -93,6 +96,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 
 	public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 		SUNSPEC_DID_0103(new Doc()),//
+		
+		SET_INTERN_DC_RELAY(new Doc().unit(Unit.NONE)),
 		
 		SETDATA_MOD_ON_CMD(new Doc().unit(Unit.ON_OFF)),
 		SETDATA_MOD_OFF_CMD(new Doc().unit(Unit.ON_OFF)),
@@ -317,20 +322,26 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //------------------------------------------START AND STOP-------------------------------------------------
 	public void startSystem() {
 		IntegerWriteChannel SETDATA_ModOnCmd = this.channel(ChannelId.SETDATA_MOD_ON_CMD);
+		IntegerWriteChannel SET_INTERN_DC_RELAY = this.channel(ChannelId.SET_INTERN_DC_RELAY);
+		if ((battery.getReadyForWorking().value().orElse(false))) {
 		try {
 			SETDATA_ModOnCmd.setNextWriteValue(START);					//Here: START = 1
-
+			SET_INTERN_DC_RELAY.setNextWriteValue(CLOSE);
 		} catch (OpenemsException e) {
 			log.error("problem occurred while trying to start inverter" + e.getMessage());
 		}
-
 	}
+		else {
+			stopSystem();
+		}
+}
 
 	public void stopSystem() {
 		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SETDATA_MOD_OFF_CMD);
-
+		IntegerWriteChannel SET_INTERN_DC_RELAY = this.channel(ChannelId.SET_INTERN_DC_RELAY);
 		try {
 			SETDATA_ModOffCmd.setNextWriteValue(STOP); 		// Here: STOP = 1
+			SET_INTERN_DC_RELAY.setNextWriteValue(OPEN);
 		} catch (OpenemsException e) {
 			log.error("problem occurred while trying to stop system" + e.getMessage());
 		}
@@ -474,7 +485,10 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 						m(EssSinexcel.ChannelId.SETDATA_MOD_ON_CMD, new UnsignedWordElement(0x028A))), // Start// SETDATA_ModOnCmd				
 				new FC6WriteRegisterTask(0x028B, 
 						m(EssSinexcel.ChannelId.SETDATA_MOD_OFF_CMD, new UnsignedWordElement(0x028B))), // Stop// SETDATA_ModOffCmd
-																													
+				
+				new FC6WriteRegisterTask(0x0290, 
+						m(EssSinexcel.ChannelId.SET_INTERN_DC_RELAY, new UnsignedWordElement(0x0290))),
+				
 				new FC6WriteRegisterTask(0x028D, 
 						m(EssSinexcel.ChannelId.SETDATA_GRID_ON_CMD, new UnsignedWordElement(0x028D))), // Start// SETDATA_GridOnCmd
 				new FC6WriteRegisterTask(0x028E, 
@@ -832,8 +846,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		IntegerWriteChannel SET_ACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_ACTIVE);
 		IntegerWriteChannel SET_REACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_REACTIVE);
 		
+		
 		int reactiveValue = (int)((reactivePower/100));
-		if((reactiveValue < MAX_REACTIVE_POWER) && (reactiveValue > (MAX_REACTIVE_POWER*(-1))) && (battery.getReadyForWorking().value().orElse(false))) {
+		if((reactiveValue < MAX_REACTIVE_POWER) && (reactiveValue > (MAX_REACTIVE_POWER*(-1)))) {
 			try {
 				SET_REACTIVE_POWER.setNextWriteValue(reactiveValue);
 			}
@@ -848,7 +863,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		
 		
 		int activeValue = (int) ((activePower/100));
-		if((activeValue < MAX_ACTIVE_POWER) && (activeValue > (MAX_ACTIVE_POWER*(-1))) && (battery.getReadyForWorking().value().orElse(false))) {
+		if((activeValue < MAX_ACTIVE_POWER) && (activeValue > (MAX_ACTIVE_POWER*(-1)))) {
 			try {
 				SET_ACTIVE_POWER.setNextWriteValue(activeValue);
 			}
@@ -869,8 +884,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
  * Example: Value 3000 means 300; Value 3001 means 300,1
  */
 	
-	@Reference
-	private Power power;
+	
 	public int maxApparentPower;
 	
 	private Battery battery;
@@ -882,11 +896,13 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private int ENABLED_ANTI_ISLANDING = 1;
 	private int START = 1;
 	private int STOP = 1;
+	private int OPEN = 0;
+	private int CLOSE = 1;
 	
 	private int SLOW_CHARGE_VOLTAGE = 3800;			// Slow and Float Charge Voltage must be the same for the Lithium Ion battery. 
 	private int FLOAT_CHARGE_VOLTAGE = 3800;		
 	
-	private int LOWER_BAT_VOLTAGE = 3000;
+	private int LOWER_BAT_VOLTAGE = 2900;
 	private int UPPER_BAT_VOLTAGE = 3900;
 	
 	private int CHARGE_CURRENT = 900;				// [CHARGE_CURRENT] = A // Range = 0 A ... 90 A
@@ -905,7 +921,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		
 		switch (event.getTopic()) {
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-			doHandling_OFF();
+			doHandling_ON();
 			LIMITS();
 			doChannelMapping();
 //			if(island = true) {

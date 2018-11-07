@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.battery.api.Battery;
+import io.openems.edge.common.channel.BooleanWriteChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.OpenemsComponent;
@@ -39,6 +40,7 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 	private int capacityKWh;
 	private int voltage;
 	private int minCellVoltage_mV;
+	private boolean ReadyForWork;
 
 	public BatteryDummy() {
 		Utils.initializeChannels(this).forEach(channel -> this.addChannel(channel));
@@ -57,6 +59,7 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 		capacityKWh = config.capacityKWh();
 		voltage = config.voltage();
 		minCellVoltage_mV = config.minCellVoltage_mV();
+		ReadyForWork = config.ReadyForWork();
 	}
 
 	@Override
@@ -79,6 +82,7 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 		IntegerWriteChannel capacityChannel = this.channel(Battery.ChannelId.CAPACITY_KWH);
 		IntegerWriteChannel voltageChannel = this.channel(Battery.ChannelId.VOLTAGE);
 		IntegerWriteChannel minCellVoltageChannel = this.channel(Battery.ChannelId.MINIMAL_CELL_VOLTAGE);
+		BooleanWriteChannel ReadyForWorkChannel = this.channel(Battery.ChannelId.READY_FOR_WORKING);
 
 		try {
 			disChargeMinVoltageChannel.setNextWriteValue(disChargeMinVoltage);
@@ -97,6 +101,7 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 			
 			voltageChannel.setNextValue(voltage);
 			minCellVoltageChannel.setNextValue(minCellVoltage_mV);
+			ReadyForWorkChannel.setNextValue(ReadyForWork);
 
 		} catch (OpenemsException e) {
 			log.error("Error occurred while writing channel values! " + e.getMessage());

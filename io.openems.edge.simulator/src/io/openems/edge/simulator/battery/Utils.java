@@ -4,7 +4,7 @@ import java.util.Arrays;
 import java.util.stream.Stream;
 
 import io.openems.edge.battery.api.Battery;
-import io.openems.edge.common.channel.BooleanReadChannel;
+import io.openems.edge.common.channel.BooleanWriteChannel;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.StateCollectorChannel;
@@ -36,7 +36,7 @@ public class Utils {
 					case VOLTAGE:
 						return new IntegerWriteChannel(s, channelId);					
 					case READY_FOR_WORKING:
-						return new BooleanReadChannel(s, channelId);
+						return new BooleanWriteChannel(s, channelId);
 					}
 					return null;
 				})

@@ -32,8 +32,10 @@ public class Utils {
 					case ACTIVE_CHARGE_ENERGY: // TODO ACTIVE_CHARGE_ENERGY
 					case ACTIVE_DISCHARGE_ENERGY: // TODO ACTIVE_DISCHARGE_ENERGY
 					case GRID_MODE:
-					case MAX_APPARENT_POWER:
 						return new IntegerReadChannel(ess, channelId);
+
+					case MAX_APPARENT_POWER:
+						return new IntegerReadChannel(ess, channelId, 30000);
 					
 						
 					}
@@ -42,9 +44,13 @@ public class Utils {
 					switch (channelId) {
 					case DEBUG_SET_ACTIVE_POWER:
 					case DEBUG_SET_REACTIVE_POWER:
-					case ALLOWED_CHARGE_POWER:
-					case ALLOWED_DISCHARGE_POWER:	
 						return new IntegerReadChannel(ess, channelId);
+					
+					case ALLOWED_CHARGE_POWER:
+						return new IntegerReadChannel(ess, channelId, -30000);
+
+					case ALLOWED_DISCHARGE_POWER:	
+						return new IntegerReadChannel(ess, channelId, 30000);
 					
 					}
 					return null;
@@ -139,6 +145,7 @@ public class Utils {
 					case DIS_MAX_A:
 					case DIS_MIN_V:
 					case EN_LIMIT:
+					case SET_INTERN_DC_RELAY:
 						return new IntegerWriteChannel(ess, channelId);
 						
 					case Serial:
