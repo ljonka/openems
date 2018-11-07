@@ -53,7 +53,10 @@ export class CurrentDataAndSummary_2018_8 extends CurrentDataAndSummary {
                 activePower: null
             }, evcs: {
                 actualPower: null,
-                energySession: null
+                currUser: null,
+                energySession: null,
+                energyTotal: null,
+                plug: null
             }
         };
 
@@ -72,7 +75,6 @@ export class CurrentDataAndSummary_2018_8 extends CurrentDataAndSummary {
             result.storage.chargeActivePower = result.storage.chargeActivePowerAC; // TODO
             result.storage.dischargeActivePowerAC = essActivePower > 0 ? essActivePower : 0;
             result.storage.dischargeActivePower = result.storage.dischargeActivePowerAC; // TODO
-            console.log("ESSACTIVEPOWER", essActivePower)
             if (sum['ProductionDcActualPower'] != null) {
                 result.storage.chargeActivePowerDC = sum['ProductionDcActualPower'];
                 result.storage.hasDC = true;

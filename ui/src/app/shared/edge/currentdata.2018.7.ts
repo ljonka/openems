@@ -55,7 +55,10 @@ export class CurrentDataAndSummary_2018_7 extends CurrentDataAndSummary {
                 activePower: null
             }, evcs: {
                 actualPower: null,
-                energySession: null
+                currUser: null,
+                energySession: null,
+                energyTotal: null,
+                plug: null
             }
         };
 
@@ -65,24 +68,22 @@ export class CurrentDataAndSummary_2018_7 extends CurrentDataAndSummary {
             * > 0 => Charge
             * = 0 => No Charge
             */
-            let actualPower = null;
-            let energySession = null;
+            let actualPower = 0;
+            let currUser = 0;
+            let energySession = 0;
+            let energyTotal = 0;
+            let plug = 0;
             for (let thing of config.evcsDevices) {
                 if (thing in currentData) {
                     let evcsData = currentData[thing];
+                    actualPower = this.getActualPower(evcsData);
                     if ("ActualPower" in evcsData) {
                         actualPower = Utils.addSafely(actualPower, evcsData.actualPower)
-                    }
-                    if ("EnergySession" in evcsData) {
-                        energySession = Utils.addSafely(energySession, evcsData.EnergySession)
                     }
                 }
             }
             if (actualPower) {
                 result.evcs.actualPower = actualPower;
-            }
-            if (energySession) {
-                result.evcs.energySession = energySession;
             }
         }
 
@@ -343,6 +344,14 @@ export class CurrentDataAndSummary_2018_7 extends CurrentDataAndSummary {
         } else if ("ActivePower" in o && o.ActivePower != null) {
             return o.ActivePower;
         } else {
+            return null;
+        }
+    }
+    private getActualPower(o: any): number {
+        if ("ActualPower" in o && o.ActualPower != null) {
+            return o.ActualPower
+        }
+        else {
             return null;
         }
     }

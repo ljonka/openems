@@ -34,6 +34,8 @@ export abstract class ConfigImpl implements DefaultTypes.Config {
 
     public abstract getEvcsWidgetChannels(): DefaultTypes.ChannelAddresses;
 
+    public abstract getEvcsChannels(): DefaultTypes.ChannelAddresses;
+
     public abstract getWidgets(): Widget[];
 
 }

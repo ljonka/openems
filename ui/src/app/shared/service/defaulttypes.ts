@@ -110,7 +110,10 @@ export module DefaultTypes {
       activePower: number
     }, evcs: {
       actualPower: number,
-      energySession: number
+      currUser: number,
+      energySession: number,
+      energyTotal: number,
+      plug: number
     }
   }
 
