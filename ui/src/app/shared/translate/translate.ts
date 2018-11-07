@@ -16,9 +16,11 @@ export class MyTranslateLoader implements TranslateLoader {
             return of(DE);
         } else if (lang == 'cz') {
             return of(CZ);
-        } else if (lang == 'nl') {
+        }
+        else if (lang == 'nl') {
             return of(NL);
-        } else if (lang == 'es') {
+        }
+        else if (lang == 'es') {
             return of(ES);
         }
         else {
