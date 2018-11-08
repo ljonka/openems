@@ -322,26 +322,18 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //------------------------------------------START AND STOP-------------------------------------------------
 	public void startSystem() {
 		IntegerWriteChannel SETDATA_ModOnCmd = this.channel(ChannelId.SETDATA_MOD_ON_CMD);
-		IntegerWriteChannel SET_INTERN_DC_RELAY = this.channel(ChannelId.SET_INTERN_DC_RELAY);
-		if ((battery.getReadyForWorking().value().orElse(false))) {
 		try {
 			SETDATA_ModOnCmd.setNextWriteValue(START);					//Here: START = 1
-			SET_INTERN_DC_RELAY.setNextWriteValue(CLOSE);
 		} catch (OpenemsException e) {
 			log.error("problem occurred while trying to start inverter" + e.getMessage());
-		}
 	}
-		else {
-			stopSystem();
-		}
+		
 }
 
 	public void stopSystem() {
 		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SETDATA_MOD_OFF_CMD);
-		IntegerWriteChannel SET_INTERN_DC_RELAY = this.channel(ChannelId.SET_INTERN_DC_RELAY);
 		try {
 			SETDATA_ModOffCmd.setNextWriteValue(STOP); 		// Here: STOP = 1
-			SET_INTERN_DC_RELAY.setNextWriteValue(OPEN);
 		} catch (OpenemsException e) {
 			log.error("problem occurred while trying to stop system" + e.getMessage());
 		}
@@ -353,6 +345,15 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 
 	public void doHandling_OFF() {
 		stopSystem();
+	}
+	
+	public void DcRelay() {
+		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SET_INTERN_DC_RELAY);
+		try {
+			SETDATA_ModOffCmd.setNextWriteValue(1); 		// Here: STOP = 1
+		} catch (OpenemsException e) {
+			log.error("problem occurred while trying to stop system" + e.getMessage());
+		}
 	}
 //-------------------------------------------------------ISLANDING-----------------------------------------------------------
 	/**
@@ -823,10 +824,10 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)),					//uint 16 // Line219 // 10
 				new FC3ReadRegistersTask(0x032E, Priority.LOW, //
 						m(EssSinexcel.ChannelId.Upper_Voltage_Limit, new UnsignedWordElement(0x032E),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1))					//uint16 // line220 // 10
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)),					//uint16 // line220 // 10
 				
-//				new FC3ReadRegistersTask(0x02EE, Priority.HIGH, //
-//						m(EssSinexcel.ChannelId.Test_Register, new UnsignedWordElement(0x02EE)))				// TESTOBJEKT
+				new FC3ReadRegistersTask(0x0290, Priority.HIGH, //
+						m(EssSinexcel.ChannelId.Test_Register, new UnsignedWordElement(0x0290)))				// TESTOBJEKT
 		);
 	
 
@@ -839,46 +840,42 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		
 	}
 	
-	
 	@Override
 	public void applyPower(int activePower, int reactivePower) {
-		
-		IntegerWriteChannel SET_ACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_ACTIVE);
-		IntegerWriteChannel SET_REACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_REACTIVE);
-		
-		
 		int reactiveValue = (int)((reactivePower/100));
-		if((reactiveValue < MAX_REACTIVE_POWER) && (reactiveValue > (MAX_REACTIVE_POWER*(-1)))) {
+		int activeValue = (int) ((activePower/100));
+		
+		if((reactiveValue < MAX_REACTIVE_POWER) && (reactiveValue > (MAX_REACTIVE_POWER*(-1))) && (activeValue < MAX_ACTIVE_POWER) && (activeValue > (MAX_ACTIVE_POWER*(-1))) && (battery.getReadyForWorking().value().orElse(false))) {
+		
+			IntegerWriteChannel SET_ACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_ACTIVE);
+			IntegerWriteChannel SET_REACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_REACTIVE);
+			IntegerWriteChannel SET_INTERN_DC_RELAY = this.channel(ChannelId.SET_INTERN_DC_RELAY);
+		
 			try {
 				SET_REACTIVE_POWER.setNextWriteValue(reactiveValue);
+				SET_INTERN_DC_RELAY.setNextWriteValue(CLOSE);
 			}
 			catch (OpenemsException e) {
 				log.error("EssSinexcel.applyPower(): Problem occurred while trying so set reactive power" + e.getMessage());
 			    }
-		}
-		else {
-			reactiveValue = 0;
-			log.error("Reactive power limit exceeded or battery system is not ready");
-		}
-		
-		
-		int activeValue = (int) ((activePower/100));
-		if((activeValue < MAX_ACTIVE_POWER) && (activeValue > (MAX_ACTIVE_POWER*(-1)))) {
+						
 			try {
 				SET_ACTIVE_POWER.setNextWriteValue(activeValue);
+				SET_INTERN_DC_RELAY.setNextWriteValue(CLOSE);
 			}
 			catch (OpenemsException e) {
 				log.error("EssSinexcel.applyPower(): Problem occurred while trying so set active power" + e.getMessage());
 			    }
+						
 		}
 		else {
+			reactiveValue = 0;
+			reactivePower = 0;
 			activeValue = 0;
-			log.error("active power limit exceeded or battery system is not ready");
+			activePower = 0;
+			return;
 		}
-		
 	}
-
-	
 	
 /**
  * Example: Value 3000 means 300; Value 3001 means 300,1
@@ -924,6 +921,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 			doHandling_ON();
 			LIMITS();
 			doChannelMapping();
+//			DcRelay();
 //			if(island = true) {
 //				doHandling_ISLANDING_ON();
 //			}
