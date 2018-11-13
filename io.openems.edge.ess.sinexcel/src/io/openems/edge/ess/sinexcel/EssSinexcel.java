@@ -39,10 +39,15 @@ import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.api.SymmetricEss;
+import io.openems.edge.ess.power.api.Constraint;
+import io.openems.edge.ess.power.api.Phase;
 import io.openems.edge.ess.power.api.Power;
+import io.openems.edge.ess.power.api.Pwr;
+import io.openems.edge.ess.power.api.Relationship;
 import io.openems.edge.meter.bsmu.BSMU;
 
 
+@SuppressWarnings("restriction")
 @Designate(ocd = Config.class, factory = true)
 @Component( //
 		name = "Ess.Sinexcel", //
@@ -61,7 +66,6 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	@Reference
 	protected ConfigurationAdmin cm;
 
-	@SuppressWarnings("restriction")
 	private BSMU battery;
 	
 	@Activate
@@ -860,9 +864,23 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		doHandling_CHARGE_DISCHARGE_CURRENT();
 		
 	}
+	@Override
+	public Constraint[] getStaticConstraints() {
+		if(BATTERY_IS_READY = false) {
+			boolean x = false;
+			return new Constraint[] { //
+					this.createPowerConstraint("Wrong ICU_STATUS or disabled: " + x, Phase.ALL, Pwr.ACTIVE,
+							Relationship.EQUALS, 0), //
+					this.createPowerConstraint("Wrong ICU_STATUS or disabled: " + x, Phase.ALL, Pwr.REACTIVE,
+							Relationship.EQUALS, 0) //
+			};
+
+		} else {
+			return Power.NO_CONSTRAINTS;
+		}
+	}
 	
 	
-	@SuppressWarnings("restriction")
 	@Override
 	public void applyPower(int activePower, int reactivePower) {
 		
@@ -870,7 +888,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		IntegerWriteChannel SET_REACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_REACTIVE);
 		
 		int reactiveValue = (int)((reactivePower/100));
-		if((reactiveValue < MAX_REACTIVE_POWER) && (reactiveValue > (MAX_REACTIVE_POWER*(-1))) && (BATTERY_IS_READY = true)) {
+		if((reactiveValue < MAX_REACTIVE_POWER) && (reactiveValue > (MAX_REACTIVE_POWER*(-1)))) {
 			if (reactiveValue < 0) {
 				battery.ChargeReq();
 			try {
@@ -890,13 +908,10 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 				    }
 			}
 		}
-		else {
-			reactiveValue = 0;
-			log.error("Reactive power limit exceeded");
-		}
+		
 		
 		int activeValue = (int) ((activePower/100));
-		if((activeValue < MAX_ACTIVE_POWER) && (activeValue > (MAX_ACTIVE_POWER*(-1))) && (BATTERY_IS_READY = true)) {
+		if((activeValue < MAX_ACTIVE_POWER) && (activeValue > (MAX_ACTIVE_POWER*(-1)))) {
 			if(activePower < 0) {
 				battery.ChargeReq();
 			try {
@@ -915,10 +930,6 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 					log.error("EssSinexcel.applyPower(): Problem occurred while trying so set active power" + e.getMessage());
 				    }
 			}
-		}
-		else {
-			activeValue = 0;
-			log.error("active power limit exceeded");
 		}
 		
 	}

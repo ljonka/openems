@@ -121,7 +121,6 @@ public class BSMU extends AbstractOpenemsModbusComponent implements Battery, Ope
 private void HandleBatteryState() {
 	switch (this.batteryState) {
 	case OFF:
-<<<<<<< HEAD
 //		stopString_1();
 //		stopString_2();
 		stopStack();
@@ -133,19 +132,10 @@ private void HandleBatteryState() {
 		startStack();
 		ReadyToStart();
 		Monitoring();		// Waiting for the End of Charge/Discharge Request of the BSMU/Battery
-=======
-		stopBAT_1();
-		stopBAT_2();
-		break;
-	case ON:
-		startBAT_1();
-		startBAT_2();
->>>>>>> feature/BSMU
 		break;
 	}
 }
 
-<<<<<<< HEAD
 public void ReadyToStart() {
 	this.channel(ChannelId.READY_TO_START).setNextValue(Start);
 }
@@ -179,12 +169,8 @@ private void Monitoring() {
 		startString_2();
 		startStack();
 	}
-=======
-private void startBAT_1() {
-	IntegerWriteChannel SET_START_STOP_1 = this.channel(ChannelId.SET_START_STOP_STRING_1);
->>>>>>> feature/BSMU
-
 }
+
 
 private void startString_1() {
 	IntegerWriteChannel SET_START_STOP_1 = this.channel(ChannelId.SET_START_STOP_STRING_1);
@@ -193,28 +179,17 @@ private void startString_1() {
 	} 
 
 	catch (OpenemsException e) {
-<<<<<<< HEAD
 	log.error("Error while trying to start battery 1\n" + e.getMessage());
 	}
 	
 }
 private void startString_2() {
 	IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
-=======
-	log.error("Error while trying to start string 1\n" + e.getMessage());
-	}
-}
-private void startBAT_2() {
-	IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
-
->>>>>>> feature/BSMU
 	try {
-	SET_START_STOP_2.setNextWriteValue(Start);
-	} 
-
-	catch (OpenemsException e) {
-<<<<<<< HEAD
-	log.error("Error while trying to start battery 2\n" + e.getMessage());
+		SET_START_STOP_2.setNextWriteValue(Start);
+	}
+	catch(OpenemsException e) {
+	log.error("Error while trying to start string 1\n" + e.getMessage());
 	}
 }
 
@@ -233,25 +208,16 @@ private void stopString_2() {
 	try {
 	SET_START_STOP_2.setNextWriteValue(Stop);
 	} 
-=======
+	catch(OpenemsException e) {
 	log.error("Error while trying to start string 2\n" + e.getMessage());
 	}
 }
 
-private void stopBAT_1() {
-		IntegerWriteChannel SET_START_STOP_1 = this.channel(ChannelId.SET_START_STOP_STRING_1);
->>>>>>> feature/BSMU
-
-	catch (OpenemsException e) {
-	log.error("Error while trying to stop battery 2\n" + e.getMessage());
-	}
-}
 
 private void startStack() {
 	IntegerWriteChannel SET_START_STOP_STACK = this.channel(ChannelId.SET_START_STOP_BATTERY_STACK);
 	
 	try {
-<<<<<<< HEAD
 	SET_START_STOP_STACK.setNextWriteValue(Start);
 	} 
 
@@ -264,9 +230,6 @@ private void stopStack() {
 	
 	try {
 	SET_START_STOP_STACK.setNextWriteValue(Stop);
-=======
-		SET_START_STOP_1.setNextWriteValue(Stop);
->>>>>>> feature/BSMU
 	} 
 
 	catch (OpenemsException e) {
@@ -275,7 +238,7 @@ private void stopStack() {
 }
 
 public void ChargeReq() {
-IntegerWriteChannel SET_CHARGE_REQ = this.channel(ChannelId.SET_BATTERY_CHARGE_DISCHARGE_REQUEST);
+	IntegerWriteChannel SET_CHARGE_REQ = this.channel(ChannelId.SET_BATTERY_CHARGE_DISCHARGE_REQUEST);
 	
 	try {
 	SET_CHARGE_REQ.setNextWriteValue(CHARGE);
@@ -286,31 +249,16 @@ IntegerWriteChannel SET_CHARGE_REQ = this.channel(ChannelId.SET_BATTERY_CHARGE_D
 	}
 }
 public void DischargeReq() {
-IntegerWriteChannel SET_DISCHARGE_REQ = this.channel(ChannelId.SET_BATTERY_CHARGE_DISCHARGE_REQUEST);
+	IntegerWriteChannel SET_DISCHARGE_REQ = this.channel(ChannelId.SET_BATTERY_CHARGE_DISCHARGE_REQUEST);
 	
 	try {
 	SET_DISCHARGE_REQ.setNextWriteValue(DISCHARGE);
 	} 
 
 	catch (OpenemsException e) {
-<<<<<<< HEAD
 	log.error("Error while trying to set the discharge command\n" + e.getMessage());
-=======
 		log.error("Error while trying to stop string 1\n" + e.getMessage());
->>>>>>> feature/BSMU
 	}
-}
-private void stopBAT_2() {
-	IntegerWriteChannel SET_START_STOP_2 = this.channel(ChannelId.SET_START_STOP_STRING_2);
-
-
-try {
-	SET_START_STOP_2.setNextWriteValue(Stop);
-} 
-
-catch (OpenemsException e) {
-	log.error("Error while trying to stop string 2\n" + e.getMessage());
-}
 }
 
 public boolean END_OF_CHARGE_1() {				// get End of charge flag of string 1

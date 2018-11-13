@@ -41,9 +41,11 @@ public class Utils {
 					switch (channelId) {
 					case DEBUG_SET_ACTIVE_POWER:
 					case DEBUG_SET_REACTIVE_POWER:
-					case ALLOWED_CHARGE_POWER:
-					case ALLOWED_DISCHARGE_POWER:
 						return new IntegerReadChannel(ess, channelId);
+					case ALLOWED_CHARGE_POWER:
+						return new IntegerReadChannel(ess, channelId, EssSinexcel.MAX_APPARENT_POWER*(-1));
+					case ALLOWED_DISCHARGE_POWER:
+						return new IntegerReadChannel(ess, channelId, EssSinexcel.MAX_APPARENT_POWER);
 					}
 					return null;
 				}), Arrays.stream(EssSinexcel.ChannelId.values()).map(channelId -> {
