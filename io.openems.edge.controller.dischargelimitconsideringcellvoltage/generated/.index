@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<repository xmlns="http://www.osgi.org/xmlns/repository/v1.0.0" name="io.openems.edge.controller.dischargelimitconsideringcellvoltage" increment="1542093350412">
+<repository xmlns="http://www.osgi.org/xmlns/repository/v1.0.0" name="io.openems.edge.controller.dischargelimitconsideringcellvoltage" increment="1542093447840">
   <resource>
     <capability namespace="osgi.identity">
       <attribute name="osgi.identity" value="io.openems.edge.controller.dischargelimitconsideringcellvoltage"/>
@@ -15,10 +15,10 @@
       <attribute name="osgi.wiring.host" value="io.openems.edge.controller.dischargelimitconsideringcellvoltage"/>
     </capability>
     <capability namespace="osgi.content">
-      <attribute name="size" value="8800" type="Long"/>
+      <attribute name="size" value="93715" type="Long"/>
       <attribute name="url" value="generated/io.openems.edge.controller.dischargelimitconsideringcellvoltage.jar"/>
       <attribute name="mime" value="application/vnd.osgi.bundle"/>
-      <attribute name="osgi.content" value="6AC3A17D1CB27E866DFECDD8AA9B61D6857C572051028A5D0BC5982E2FAC061A"/>
+      <attribute name="osgi.content" value="B4BD611876E250D87BFD458771ACEADC049A32ECAD9DB1DDC72963518186F925"/>
     </capability>
     <capability namespace="bndtools.workspace">
       <attribute name="bndtools.workspace" value="file:/C:/Users/philip.karmann/git/workspace-openems"/>
