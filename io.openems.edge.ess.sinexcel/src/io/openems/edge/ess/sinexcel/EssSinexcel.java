@@ -1,5 +1,6 @@
 package io.openems.edge.ess.sinexcel;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.osgi.service.cm.ConfigurationAdmin;
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.battery.api.Battery;
+import io.openems.edge.bridge.modbus.AbstractModbusBridge;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
 import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
@@ -75,6 +77,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		if (OpenemsComponent.updateReferenceFilter(this.cm, config.service_pid(), "battery", config.battery_id())) {
 			return;
 		}
+		
+		doChannelMapping();
 	}
 
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
@@ -95,9 +99,6 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	protected void setModbus(BridgeModbus modbus) {
 		super.setModbus(modbus); // Bridge Modbus
 	}
-
-	
-
 	
 	public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 		SUNSPEC_DID_0103(new Doc()), //
@@ -109,7 +110,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		SETDATA_GRID_ON_CMD(new Doc().unit(Unit.ON_OFF)), SETDATA_GRID_OFF_CMD(new Doc().unit(Unit.ON_OFF)),
 		SET_ANTI_ISLANDING(new Doc().unit(Unit.ON_OFF)),
 
-		SET_CHARGE_DISCHARGE_ACTIVE(new Doc().unit(Unit.KILOWATT_HOURS)), //
+		SET_CHARGE_DISCHARGE_ACTIVE(new Doc().unit(Unit.KILOWATT)), //
 		SET_CHARGE_DISCHARGE_REACTIVE(new Doc().unit(Unit.KILO_VOLT_AMPERE_REACTIVE)), //
 
 		SET_CHARGE_CURRENT(new Doc().unit(Unit.AMPERE)), SET_DISCHARGE_CURRENT(new Doc().unit(Unit.AMPERE)),
@@ -306,11 +307,11 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 
 //------------------------------------------START AND STOP-------------------------------------------------
 	public void startSystem() {
+//		timeForSystemInitialization.plusSeconds(7).isAfter(LocalDateTime.now());
 		IntegerWriteChannel SETDATA_ModOnCmd = this.channel(ChannelId.SETDATA_MOD_ON_CMD);
-		IntegerWriteChannel SET_INTERN_DC_RELAY = this.channel(ChannelId.SET_INTERN_DC_RELAY);
 		try {
-			SET_INTERN_DC_RELAY.setNextWriteValue(CLOSE);
 			SETDATA_ModOnCmd.setNextWriteValue(START); // Here: START = 1
+			log.info("startSystem: SETDATA_MOD_ON_CMD");
 		} catch (OpenemsException e) {
 			log.error("problem occurred while trying to start inverter" + e.getMessage());
 		}
@@ -319,10 +320,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 
 	public void stopSystem() {
 		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SETDATA_MOD_OFF_CMD);
-		IntegerWriteChannel SET_INTERN_DC_RELAY = this.channel(ChannelId.SET_INTERN_DC_RELAY);
 		try {
-			SET_INTERN_DC_RELAY.setNextWriteValue(OPEN);
 			SETDATA_ModOffCmd.setNextWriteValue(STOP); // Here: STOP = 1
+			log.info("stopSystem: SETDATA_MOD_OFF_CMD");
 		} catch (OpenemsException e) {
 			log.error("problem occurred while trying to stop system" + e.getMessage());
 		}
@@ -470,61 +470,41 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		return new ModbusProtocol(this, //
 //------------------------------------------------------------WRITE-----------------------------------------------------------
 				new FC6WriteRegisterTask(0x028A,
-						m(EssSinexcel.ChannelId.SETDATA_MOD_ON_CMD, new UnsignedWordElement(0x028A))), // Start//
-																										// SETDATA_ModOnCmd
+						m(EssSinexcel.ChannelId.SETDATA_MOD_ON_CMD, new UnsignedWordElement(0x028A))), // Start SETDATA_ModOnCmd
 				new FC6WriteRegisterTask(0x028B,
-						m(EssSinexcel.ChannelId.SETDATA_MOD_OFF_CMD, new UnsignedWordElement(0x028B))), // Stop//
-																										// SETDATA_ModOffCmd
+						m(EssSinexcel.ChannelId.SETDATA_MOD_OFF_CMD, new UnsignedWordElement(0x028B))), // Stop SETDATA_ModOffCmd
 
 				new FC6WriteRegisterTask(0x0290,
 						m(EssSinexcel.ChannelId.SET_INTERN_DC_RELAY, new UnsignedWordElement(0x0290))),
 
 				new FC6WriteRegisterTask(0x028D,
-						m(EssSinexcel.ChannelId.SETDATA_GRID_ON_CMD, new UnsignedWordElement(0x028D))), // Start//
-																										// SETDATA_GridOnCmd
+						m(EssSinexcel.ChannelId.SETDATA_GRID_ON_CMD, new UnsignedWordElement(0x028D))), // Start SETDATA_GridOnCmd
 				new FC6WriteRegisterTask(0x028E,
-						m(EssSinexcel.ChannelId.SETDATA_GRID_OFF_CMD, new UnsignedWordElement(0x028E))), // Stop//
-																											// SETDATA_GridOffCmd
+						m(EssSinexcel.ChannelId.SETDATA_GRID_OFF_CMD, new UnsignedWordElement(0x028E))), // Stop SETDATA_GridOffCmd
 
 				new FC6WriteRegisterTask(0x0087,
-						m(EssSinexcel.ChannelId.SET_CHARGE_DISCHARGE_ACTIVE, new SignedWordElement(0x0087))), // Target
-																												// ACTIVE
-																												// Power
-																												// //Line65
+						m(EssSinexcel.ChannelId.SET_CHARGE_DISCHARGE_ACTIVE, new SignedWordElement(0x0087))), // Target ACTIVE Power //Line65
+
 				new FC6WriteRegisterTask(0x0088,
-						m(EssSinexcel.ChannelId.SET_CHARGE_DISCHARGE_REACTIVE, new SignedWordElement(0x0088))), // Target
-																												// ACTIVE
-																												// Power
-																												// //Line65
+						m(EssSinexcel.ChannelId.SET_CHARGE_DISCHARGE_REACTIVE, new SignedWordElement(0x0088))), // Target ACTIVE Power //Line65
 
 				new FC6WriteRegisterTask(0x032B,
-						m(EssSinexcel.ChannelId.SET_CHARGE_CURRENT, new UnsignedWordElement(0x032B))), // MAX_CHARGING_CURRENT
-																										// //Line217
+						m(EssSinexcel.ChannelId.SET_CHARGE_CURRENT, new UnsignedWordElement(0x032B))), // MAX_CHARGING_CURRENT //Line217
+				
 				new FC6WriteRegisterTask(0x032C,
-						m(EssSinexcel.ChannelId.SET_DISCHARGE_CURRENT, new UnsignedWordElement(0x032C))), // MAX_DISCHARGING_CURRENT
-																											// //Line218
+						m(EssSinexcel.ChannelId.SET_DISCHARGE_CURRENT, new UnsignedWordElement(0x032C))), // MAX_DISCHARGING_CURRENT //Line218
 
 				new FC6WriteRegisterTask(0x0329,
-						m(EssSinexcel.ChannelId.SET_SLOW_CHARGE_VOLTAGE, new UnsignedWordElement(0x0329))), // Slow
-																											// charge
-																											// Voltage
-																											// //
-																											// Line215
+						m(EssSinexcel.ChannelId.SET_SLOW_CHARGE_VOLTAGE, new UnsignedWordElement(0x0329))), // Slow charge Voltage// Line215
+																											
 				new FC6WriteRegisterTask(0x0328,
 						m(EssSinexcel.ChannelId.SET_FLOAT_CHARGE_VOLTAGE, new UnsignedWordElement(0x0328))),
 
 				new FC6WriteRegisterTask(0x032E,
-						m(EssSinexcel.ChannelId.SET_UPPER_VOLTAGE, new UnsignedWordElement(0x032E))), // Upper voltage
-																										// limit of
-																										// battery
-																										// protection
-																										// //Line220
+						m(EssSinexcel.ChannelId.SET_UPPER_VOLTAGE, new UnsignedWordElement(0x032E))), // Upper voltage limit of battery protection //Line220
+
 				new FC6WriteRegisterTask(0x032D,
-						m(EssSinexcel.ChannelId.SET_LOWER_VOLTAGE, new UnsignedWordElement(0x032D))), // LOWER voltage
-																										// limit of
-																										// battery
-																										// protection
-																										// //Line219
+						m(EssSinexcel.ChannelId.SET_LOWER_VOLTAGE, new UnsignedWordElement(0x032D))), // LOWER voltage limit of battery protection //Line219
 
 				new FC6WriteRegisterTask(0x0316,
 						m(EssSinexcel.ChannelId.SET_ANTI_ISLANDING, new UnsignedWordElement(0x0316))), // Line194
@@ -532,12 +512,11 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //----------------------------------------------------------READ------------------------------------------------------
 				new FC3ReadRegistersTask(0x024A, Priority.HIGH, //
 						m(EssSinexcel.ChannelId.Frequency, new SignedWordElement(0x024A),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // int16 //Line 132 // Magnification =
-																					// 100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // int16 //Line 132 // Magnification = 100
 
 				new FC3ReadRegistersTask(0x0084, Priority.HIGH, //
-						m(EssSinexcel.ChannelId.Temperature, new SignedWordElement(0x0084))), // int16 // Line 62
-																								// Magnification = 0
+						m(EssSinexcel.ChannelId.Temperature, new SignedWordElement(0x0084))), // int16 // Line 62 // Magnification = 0
+																								
 
 				new FC3ReadRegistersTask(0x0260, Priority.HIGH,
 						m(EssSinexcel.ChannelId.Sinexcel_State, new UnsignedWordElement(0x0260))),
@@ -549,58 +528,57 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 				new FC3ReadRegistersTask(0x01F8, Priority.LOW,
 						m(EssSinexcel.ChannelId.Manufacturer, new StringWordElement(0x01F8, 16))), // String // Line109
 				new FC3ReadRegistersTask(0x0208, Priority.LOW,
-						m(EssSinexcel.ChannelId.Model_2, new StringWordElement(0x0208, 16))), // String (32Char) //
-																								// line110
+						m(EssSinexcel.ChannelId.Model_2, new StringWordElement(0x0208, 16))), // String (32Char) // line110
+
 				new FC3ReadRegistersTask(0x0220, Priority.LOW,
-						m(EssSinexcel.ChannelId.Version, new StringWordElement(0x0220, 8))), // String (16Char) //
-																								// Line112
+						m(EssSinexcel.ChannelId.Version, new StringWordElement(0x0220, 8))), // String (16Char) // Line112
+
 				new FC3ReadRegistersTask(0x0228, Priority.LOW,
-						m(EssSinexcel.ChannelId.Serial_Number, new StringWordElement(0x0228, 16))), // String (32Char)
-																									// // Line113
+						m(EssSinexcel.ChannelId.Serial_Number, new StringWordElement(0x0228, 16))), // String (32Char)// Line113
 
 				new FC3ReadRegistersTask(0x006B, Priority.HIGH,
 						m(EssSinexcel.ChannelId.Analog_GridCurrent_Freq, new UnsignedWordElement(0x006B),
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // 10
 
 				new FC3ReadRegistersTask(0x006E, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_ActivePower_Rms_Value_L1, new SignedWordElement(0x006E),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // L1 // kW //100
+						m(EssSinexcel.ChannelId.Analog_ActivePower_Rms_Value_L1, new SignedWordElement(0x006E),		// L1 // kW //100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), 
 				new FC3ReadRegistersTask(0x006F, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_ActivePower_Rms_Value_L2, new SignedWordElement(0x006F),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // L2 // kW // 100
+						m(EssSinexcel.ChannelId.Analog_ActivePower_Rms_Value_L2, new SignedWordElement(0x006F),		// L2 // kW // 100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), 
 				new FC3ReadRegistersTask(0x0070, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_ActivePower_Rms_Value_L3, new SignedWordElement(0x0070),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // L3 // kW // 100
+						m(EssSinexcel.ChannelId.Analog_ActivePower_Rms_Value_L3, new SignedWordElement(0x0070),		// L3 // kW // 100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), 
 
 				new FC3ReadRegistersTask(0x0071, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_ReactivePower_Rms_Value_L1, new SignedWordElement(0x0071),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // L1 // kVAr // 100
+						m(EssSinexcel.ChannelId.Analog_ReactivePower_Rms_Value_L1, new SignedWordElement(0x0071), 	// L1 // kVAr // 100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),
 				new FC3ReadRegistersTask(0x0072, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_ReactivePower_Rms_Value_L2, new SignedWordElement(0x0072),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // L2 // kVAr // 100
+						m(EssSinexcel.ChannelId.Analog_ReactivePower_Rms_Value_L2, new SignedWordElement(0x0072),	// L2 // kVAr // 100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), 
 				new FC3ReadRegistersTask(0x0073, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_ReactivePower_Rms_Value_L3, new SignedWordElement(0x0073),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // L3 // kVAr // 100
+						m(EssSinexcel.ChannelId.Analog_ReactivePower_Rms_Value_L3, new SignedWordElement(0x0073),	 // L3 // kVAr // 100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),
 
 				new FC3ReadRegistersTask(0x0074, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_ApparentPower_L1, new SignedWordElement(0x0074),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // L1 // kVA // 100
+						m(EssSinexcel.ChannelId.Analog_ApparentPower_L1, new SignedWordElement(0x0074),	// L1 // kVA // 100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), 
 				new FC3ReadRegistersTask(0x0075, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_ApparentPower_L2, new SignedWordElement(0x0075),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // L2 // kVA // 100
+						m(EssSinexcel.ChannelId.Analog_ApparentPower_L2, new SignedWordElement(0x0075), // L2 // kVA // 100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),
 				new FC3ReadRegistersTask(0x0076, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_ApparentPower_L3, new SignedWordElement(0x0076),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // L3 // kVA // 100
+						m(EssSinexcel.ChannelId.Analog_ApparentPower_L3, new SignedWordElement(0x0076), // L3 // kVA // 100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),
 
 				new FC3ReadRegistersTask(0x0077, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_PF_RMS_Value_L1, new SignedWordElement(0x0077),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // 100
+						m(EssSinexcel.ChannelId.Analog_PF_RMS_Value_L1, new SignedWordElement(0x0077),	// 100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), 
 				new FC3ReadRegistersTask(0x0078, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_PF_RMS_Value_L2, new SignedWordElement(0x0078),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // 100
+						m(EssSinexcel.ChannelId.Analog_PF_RMS_Value_L2, new SignedWordElement(0x0078),	// 100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), 
 				new FC3ReadRegistersTask(0x0079, Priority.HIGH,
-						m(EssSinexcel.ChannelId.Analog_PF_RMS_Value_L3, new SignedWordElement(0x0079),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // 100
+						m(EssSinexcel.ChannelId.Analog_PF_RMS_Value_L3, new SignedWordElement(0x0079),	// 100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), 
 
 				new FC3ReadRegistersTask(0x007A, Priority.HIGH,
 						m(EssSinexcel.ChannelId.Analog_ActivePower_3Phase, new SignedWordElement(0x007A))), // 1
@@ -653,58 +631,45 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //-----------------------------------------DC Parameter-----------------------------------------------------------------
 				new FC3ReadRegistersTask(0x008D, Priority.HIGH,
 						m(EssSinexcel.ChannelId.DC_Power, new SignedWordElement(0x008D),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // int16 // Line69 // Magnification =
-																					// 100
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // int16 // Line69 // Magnification = 100
+																					
 
 				new FC3ReadRegistersTask(0x0255, Priority.HIGH,
-						m(EssSinexcel.ChannelId.DC_Current, new SignedWordElement(0x0255))), // int16 // Line142 //
-																								// Magnification = 10
+						m(EssSinexcel.ChannelId.DC_Current, new SignedWordElement(0x0255))), // int16 // Line142 // Magnification = 10
 
 				new FC3ReadRegistersTask(0x0257, Priority.HIGH, //
 						m(EssSinexcel.ChannelId.DC_Voltage, new UnsignedWordElement(0x0257),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // NennSpannung // uint16 // Line144
-																					// // Magnification = 10
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // NennSpannung // uint16 // Line144 // Magnification = 10
 
 //-----------------------------------------AC Parameter-----------------------------------------------------------------
 				new FC3ReadRegistersTask(0x0065, Priority.HIGH, //
 						m(EssSinexcel.ChannelId.InvOutVolt_L1, new UnsignedWordElement(0x0065),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint16 // Line36 // Magnification =
-																					// 10//
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint16 // Line36 // Magnification = 10
 				new FC3ReadRegistersTask(0x0066, Priority.HIGH, //
 						m(EssSinexcel.ChannelId.InvOutVolt_L2, new UnsignedWordElement(0x0066),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint16 // Line37 // Magnification =
-																					// 10//
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint16 // Line37 // Magnification = 10
 				new FC3ReadRegistersTask(0x0067, Priority.HIGH, //
 						m(EssSinexcel.ChannelId.InvOutVolt_L3, new UnsignedWordElement(0x0067),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint16 // Line38 // Magnification =
-																					// 10
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint16 // Line38 // Magnification = 10
 
 				new FC3ReadRegistersTask(0x0068, Priority.HIGH, //
 						m(EssSinexcel.ChannelId.InvOutCurrent_L1, new UnsignedWordElement(0x0068),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint16 // Line39// Magnification =
-																					// 10
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint16 // Line39// Magnification = 10
 				new FC3ReadRegistersTask(0x0069, Priority.HIGH, //
 						m(EssSinexcel.ChannelId.InvOutCurrent_L2, new UnsignedWordElement(0x0069),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint16 // Line40// Magnification=
-																					// 10
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint16 // Line40// Magnification= 10
 				new FC3ReadRegistersTask(0x006A, Priority.HIGH, //
 						m(EssSinexcel.ChannelId.InvOutCurrent_L3, new UnsignedWordElement(0x006A),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint16 // Line41// Magnification=
-																					// 10
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint16 // Line41// Magnification= 10
 
 				new FC3ReadRegistersTask(0x0248, Priority.HIGH, //
-						m(EssSinexcel.ChannelId.AC_Power, new SignedWordElement(0x0248))), // int16 // Line130 //
-																							// Magnification = 0
+						m(EssSinexcel.ChannelId.AC_Power, new SignedWordElement(0x0248))), // int16 // Line130 // Magnification = 0
 
 				new FC3ReadRegistersTask(0x024C, Priority.HIGH, //
-						m(EssSinexcel.ChannelId.AC_Apparent_Power, new SignedWordElement(0x024C))), // int16 // Line134
-																									// // Magnification
-																									// = 0//
+						m(EssSinexcel.ChannelId.AC_Apparent_Power, new SignedWordElement(0x024C))), // int16 // Line134// Magnification = 0
 
 				new FC3ReadRegistersTask(0x024E, Priority.HIGH, //
-						m(EssSinexcel.ChannelId.AC_Reactive_Power, new SignedWordElement(0x024E))), // int16 // Line136
-																									// // Magnification
-																									// = 0
+						m(EssSinexcel.ChannelId.AC_Reactive_Power, new SignedWordElement(0x024E))), // int16 // Line136 // Magnification = 0
 
 //-----------------------------------------EVENT Bitfield 32------------------------------------------------------------		
 				new FC3ReadRegistersTask(0x0262, Priority.LOW, //
@@ -836,8 +801,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //----------------------------------------------------GENERAL SETTINGS--------------------------------------------------------------
 				new FC3ReadRegistersTask(0x0087, Priority.LOW, //
 						m(EssSinexcel.ChannelId.Target_Active_Power, new SignedWordElement(0x0087),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // int 16 // Line65 // Magnification =
-																					// 10
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // int 16 // Line65 // Magnification = 10
 				new FC3ReadRegistersTask(0x0088, Priority.LOW, //
 						m(EssSinexcel.ChannelId.Target_Reactive_Power, new SignedWordElement(0x0088),
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)),
@@ -850,11 +814,11 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)),					// uint 16 // Line217 // Magnifiaction = 10
 
 				new FC3ReadRegistersTask(0x032D, Priority.LOW, //
-						m(EssSinexcel.ChannelId.Lower_Voltage_Limit, new UnsignedWordElement(0x032D),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint 16 // Line219 // 10
+						m(EssSinexcel.ChannelId.Lower_Voltage_Limit, new UnsignedWordElement(0x032D),	// uint 16 // Line219 // 10
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), 
 				new FC3ReadRegistersTask(0x032E, Priority.LOW, //
-						m(EssSinexcel.ChannelId.Upper_Voltage_Limit, new UnsignedWordElement(0x032E),
-								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), // uint16 // line220 // 10
+						m(EssSinexcel.ChannelId.Upper_Voltage_Limit, new UnsignedWordElement(0x032E),	 // uint16 // line220 // 10
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)),
 
 				new FC3ReadRegistersTask(0x0290, Priority.HIGH, //
 						m(EssSinexcel.ChannelId.Test_Register, new UnsignedWordElement(0x0290))) // TESTOBJEKT
@@ -873,25 +837,16 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	@Override
 	public Constraint[] getStaticConstraints() {
 		if(!battery.getReadyForWorking().value().orElse(false)) {
-			boolean x = false;
-			IntegerWriteChannel SET_INTERN_DC_RELAY = this.channel(ChannelId.SET_INTERN_DC_RELAY);
-			try {
-				SET_INTERN_DC_RELAY.setNextWriteValue(OPEN);
-			}
-			catch(OpenemsException e) {
-				log.error("Battery is not ready");
-			}
-			log.error("Battery is not ready");
+			log.info("getStaticConstraints: Battery not ready");
 			return new Constraint[] { //
-					this.createPowerConstraint("Battery is not ready " + x, Phase.ALL, Pwr.ACTIVE,
+					this.createPowerConstraint("Battery is not ready", Phase.ALL, Pwr.ACTIVE,
 							Relationship.EQUALS, 0), //
-					this.createPowerConstraint("Battery is not ready " + x,  Phase.ALL, Pwr.REACTIVE,
+					this.createPowerConstraint("Battery is not ready",  Phase.ALL, Pwr.REACTIVE,
 							Relationship.EQUALS, 0) //
 			};
-			
 		} else {
+			log.info("getStaticConstraints: Battery ready");
 			return Power.NO_CONSTRAINTS;
-		
 		}
 	}
 	
@@ -935,7 +890,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	public int maxApparentPower;
 
 	private Battery battery;
-	
+	private LocalDateTime timeForSystemInitialization = null;
 
 	private int MAX_REACTIVE_POWER = 300; // 30 kW
 	private int MAX_ACTIVE_POWER = 300; // 30 kW
@@ -957,7 +912,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private int CHARGE_CURRENT = 900; // [CHARGE_CURRENT] = A // Range = 0 A ... 90 A
 	private int DISCHARGE_CURRENT = 900; // [DISCHARGE_CURRENT] = A // Range = 0 A ... 90 A
 //	private int ACTIVE = 0;							// [ACTIVE] = kW	// Range = -30 kW ... 30 kW	// ACTIVE < 0 -> CHARGE //	ACTIVE > 0 ->DISCHARGE 
-//	private int REACTIVE = 0;						// [REACTIVE] = kVAr	// Range = -30 kW ... 30 //REACTIVE < 0 -> inductive // REACTIVE > 0 -> capacitive 
+//	private int REACTIVE = 0;						// [REACTIVE] = kVAr	// Range = -30 kW ... 30 //REACTIVE < 0 -> inductive // REACTIVE > 0 -> capacitive
+	
 
 	@Override
 	public void handleEvent(Event event) {
@@ -970,14 +926,14 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		switch (event.getTopic()) {
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
 //			doHandling_OFF();
-			if(battery.getReadyForWorking().value().orElse(false)) {
-				doHandling_ON();
-			}
-			else if (!battery.getReadyForWorking().value().orElse(false)) {
-				doHandling_OFF();
-			}
+//			if(battery.getReadyForWorking().value().orElse(false)) {
+//				doHandling_ON();
+//				log.error("TEST" + this.channel(ChannelId.Model).value());
+//			}
+//			else if (!battery.getReadyForWorking().value().orElse(false)) {
+//				doHandling_OFF();
+//			}
 			LIMITS();
-			doChannelMapping();
 //			DcRelay();
 //			if(island = true) {
 //				doHandling_ISLANDING_ON();
@@ -986,6 +942,13 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //				doHandling_ISLANDING_OFF();
 //			}
 
+			
+			if(!battery.getReadyForWorking().value().orElse(false)) {
+				doHandling_OFF();
+			} else {
+				doHandling_ON();
+			}
+			
 			break;
 		}
 	}
