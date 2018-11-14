@@ -304,108 +304,6 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 
 		}
 	}
-
-//------------------------------------------START AND STOP-------------------------------------------------
-	public void startSystem() {
-//		timeForSystemInitialization.plusSeconds(7).isAfter(LocalDateTime.now());
-		IntegerWriteChannel SETDATA_ModOnCmd = this.channel(ChannelId.SETDATA_MOD_ON_CMD);
-		try {
-			SETDATA_ModOnCmd.setNextWriteValue(START); // Here: START = 1
-			log.info("startSystem: SETDATA_MOD_ON_CMD");
-		} catch (OpenemsException e) {
-			log.error("problem occurred while trying to start inverter" + e.getMessage());
-		}
-
-	}
-
-	public void stopSystem() {
-		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SETDATA_MOD_OFF_CMD);
-		try {
-			SETDATA_ModOffCmd.setNextWriteValue(STOP); // Here: STOP = 1
-			log.info("stopSystem: SETDATA_MOD_OFF_CMD");
-		} catch (OpenemsException e) {
-			log.error("problem occurred while trying to stop system" + e.getMessage());
-		}
-	}
-
-	public void doHandling_ON() {
-		startSystem();
-	}
-
-	public void doHandling_OFF() {
-		stopSystem();
-	}
-
-	public void DcRelay() {
-		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SET_INTERN_DC_RELAY);
-		try {
-			SETDATA_ModOffCmd.setNextWriteValue(1); // Here: STOP = 1
-		} catch (OpenemsException e) {
-			log.error("problem occurred while trying to stop system" + e.getMessage());
-		}
-	}
-
-//-------------------------------------------------------ISLANDING-----------------------------------------------------------
-	/**
-	 * At first the PCS needs a stop command, then is required to remove the AC
-	 * connection, after that the Grid OFF command.
-	 */
-
-	public void ISLANDING_ON() {
-		IntegerWriteChannel SET_ANTI_ISLANDING = this.channel(ChannelId.SET_ANTI_ISLANDING);
-		IntegerWriteChannel SETDATA_GridOffCmd = this.channel(ChannelId.SETDATA_GRID_OFF_CMD);
-
-		try {
-
-			SET_ANTI_ISLANDING.setNextWriteValue(DISABLED_ANTI_ISLANDING);
-			SETDATA_GridOffCmd.setNextWriteValue(STOP);
-		} catch (OpenemsException e) {
-			log.error("problem occurred while trying to activate" + e.getMessage());
-		}
-	}
-
-	/**
-	 * At first the PCS needs a stop command, then is required to plug in the AC
-	 * connection, after that the Grid ON command.
-	 */
-	public void ISLANDING_OFF() {
-		IntegerWriteChannel SET_ANTI_ISLANDING = this.channel(ChannelId.SET_ANTI_ISLANDING);
-		IntegerWriteChannel SETDATA_GridOnCmd = this.channel(ChannelId.SETDATA_GRID_ON_CMD);
-		try {
-			SET_ANTI_ISLANDING.setNextWriteValue(ENABLED_ANTI_ISLANDING);
-			SETDATA_GridOnCmd.setNextWriteValue(START);
-		} catch (OpenemsException e) {
-			log.error("problem occurred while trying to deactivate islanding" + e.getMessage());
-		}
-	}
-
-	public void doHandling_ISLANDING_ON() {
-		ISLANDING_ON();
-	}
-
-	public void doHandling_ISLANDING_OFF() {
-		ISLANDING_OFF();
-	}
-//-----------------------------------------------------MAX CHARGE AND DISCHARGE CURRENT-----------------------------------------------
-
-	public void SET_CHARGE_DISCHARGE_CURRENT() {
-
-		IntegerWriteChannel SET_DISCHARGE_CURRENT = this.channel(ChannelId.SET_DISCHARGE_CURRENT);
-		IntegerWriteChannel SET_CHARGE_CURRENT = this.channel(ChannelId.SET_CHARGE_CURRENT);
-		try {
-			SET_DISCHARGE_CURRENT.setNextWriteValue(DISCHARGE_CURRENT);
-			SET_CHARGE_CURRENT.setNextWriteValue(CHARGE_CURRENT);
-
-		} catch (OpenemsException e) {
-			log.error("problem occurred while trying to write the charge and discharge current value" + e.getMessage());
-		}
-
-	}
-
-	public void doHandling_CHARGE_DISCHARGE_CURRENT() {
-		SET_CHARGE_DISCHARGE_CURRENT();
-	}
-
 	private void doChannelMapping() {
 		this.battery.getSoc().onChange(value -> {
 			this.getSoc().setNextValue(value.get());
@@ -433,10 +331,89 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 			this.channel(ChannelId.BAT_VOLTAGE).setNextValue(value.get());
 		});
 	}
+	
+	public void Inverter_ON() {
+//		timeForSystemInitialization.plusSeconds(7).isAfter(LocalDateTime.now());
+		IntegerWriteChannel SETDATA_ModOnCmd = this.channel(ChannelId.SETDATA_MOD_ON_CMD);
+		try {
+			SETDATA_ModOnCmd.setNextWriteValue(START); // Here: START = 1
+			log.info("startSystem: SETDATA_MOD_ON_CMD");
+		} catch (OpenemsException e) {
+			log.error("problem occurred while trying to start inverter" + e.getMessage());
+		}
 
-//---------------------------------------------SET UPPER/LOWER BATTERY VOLTAGE --------------------------------------------	
-	public void SET_UPPER_LOWER_BATTERY_VOLTAGE() {
+	}
 
+	public void Inverter_OFF() {
+		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SETDATA_MOD_OFF_CMD);
+		try {
+			SETDATA_ModOffCmd.setNextWriteValue(STOP); // Here: STOP = 1
+			log.info("stopSystem: SETDATA_MOD_OFF_CMD");
+		} catch (OpenemsException e) {
+			log.error("problem occurred while trying to stop system" + e.getMessage());
+		}
+	}
+
+	public void DcRelay() {
+		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SET_INTERN_DC_RELAY);
+		try {
+			SETDATA_ModOffCmd.setNextWriteValue(1); // Here: STOP = 1
+		} catch (OpenemsException e) {
+			log.error("problem occurred while trying to stop system" + e.getMessage());
+		}
+	}
+
+	/**
+	 * At first the PCS needs a stop command, then is required to remove the AC
+	 * connection, after that the Grid OFF command.
+	 */
+
+	public void ISLANDING_ON() {
+		IntegerWriteChannel SET_ANTI_ISLANDING = this.channel(ChannelId.SET_ANTI_ISLANDING);
+		IntegerWriteChannel SETDATA_GridOffCmd = this.channel(ChannelId.SETDATA_GRID_OFF_CMD);
+		try {
+
+			SET_ANTI_ISLANDING.setNextWriteValue(DISABLED_ANTI_ISLANDING);
+			SETDATA_GridOffCmd.setNextWriteValue(STOP);
+		} catch (OpenemsException e) {
+			log.error("problem occurred while trying to activate" + e.getMessage());
+		}
+	}
+	/**
+	 * At first the PCS needs a stop command, then is required to plug in the AC
+	 * connection, after that the Grid ON command.
+	 */
+	public void ISLANDING_OFF() {
+		IntegerWriteChannel SET_ANTI_ISLANDING = this.channel(ChannelId.SET_ANTI_ISLANDING);
+		IntegerWriteChannel SETDATA_GridOnCmd = this.channel(ChannelId.SETDATA_GRID_ON_CMD);
+		try {
+			SET_ANTI_ISLANDING.setNextWriteValue(ENABLED_ANTI_ISLANDING);
+			SETDATA_GridOnCmd.setNextWriteValue(START);
+		} catch (OpenemsException e) {
+			log.error("problem occurred while trying to deactivate islanding" + e.getMessage());
+		}
+	}
+
+	public void doHandling_CHARGE_DISCHARGE_CURRENT() {
+		IntegerWriteChannel SET_DISCHARGE_CURRENT = this.channel(ChannelId.SET_DISCHARGE_CURRENT);
+		IntegerWriteChannel SET_CHARGE_CURRENT = this.channel(ChannelId.SET_CHARGE_CURRENT);
+		try {
+			SET_DISCHARGE_CURRENT.setNextWriteValue(DISCHARGE_CURRENT);
+			SET_CHARGE_CURRENT.setNextWriteValue(CHARGE_CURRENT);
+
+		} catch (OpenemsException e) {
+			log.error("problem occurred while trying to write the charge and discharge current value" + e.getMessage());
+		}
+	}
+
+	private void LIMITS() { 
+		maxApparentPower = 30000;
+		doHandling_UPPER_LOWER_VOLTAGE();
+		doHandling_CHARGE_DISCHARGE_CURRENT();
+
+	}
+
+	public void doHandling_UPPER_LOWER_VOLTAGE() {
 		IntegerWriteChannel SET_LOWER_VOLTAGE = this.channel(ChannelId.SET_LOWER_VOLTAGE);
 		IntegerWriteChannel SET_UPPER_VOLTAGE = this.channel(ChannelId.SET_UPPER_VOLTAGE);
 		IntegerWriteChannel SET_SLOW_CHARGE_VOLTAGE = this.channel(ChannelId.SET_SLOW_CHARGE_VOLTAGE);
@@ -450,11 +427,6 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		} catch (OpenemsException e) {
 			log.error("problem occurred while trying to write the voltage limits" + e.getMessage());
 		}
-
-	}
-
-	public void doHandling_UPPER_LOWER_VOLTAGE() {
-		SET_UPPER_LOWER_BATTERY_VOLTAGE();
 	}
 
 //------------------------------------------------------GET VALUE--------------------------------------------------
@@ -463,7 +435,6 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		Optional<Boolean> islanding = i.getNextValue().asOptional();
 		return islanding.isPresent() && islanding.get();
 	}
-
 //------------------------------------------------------------------------------------------------------------------	
 
 	protected ModbusProtocol defineModbusProtocol() {
@@ -632,7 +603,6 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 				new FC3ReadRegistersTask(0x008D, Priority.HIGH,
 						m(EssSinexcel.ChannelId.DC_Power, new SignedWordElement(0x008D),
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // int16 // Line69 // Magnification = 100
-																					
 
 				new FC3ReadRegistersTask(0x0255, Priority.HIGH,
 						m(EssSinexcel.ChannelId.DC_Current, new SignedWordElement(0x0255))), // int16 // Line142 // Magnification = 10
@@ -827,12 +797,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	}
 
 //------------------------------------------------------------------------------------------------------------------------
-	private void LIMITS() { // Watch KACO initialize
-		maxApparentPower = 30000;
-		doHandling_UPPER_LOWER_VOLTAGE();
-		doHandling_CHARGE_DISCHARGE_CURRENT();
-
-	}
+	
 	
 	@Override
 	public Constraint[] getStaticConstraints() {
@@ -925,7 +890,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 
 		switch (event.getTopic()) {
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-//			doHandling_OFF();
+
 //			if(battery.getReadyForWorking().value().orElse(false)) {
 //				doHandling_ON();
 //				log.error("TEST" + this.channel(ChannelId.Model).value());
@@ -933,8 +898,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //			else if (!battery.getReadyForWorking().value().orElse(false)) {
 //				doHandling_OFF();
 //			}
-			LIMITS();
+			
 //			DcRelay();
+			
 //			if(island = true) {
 //				doHandling_ISLANDING_ON();
 //			}
@@ -942,11 +908,12 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //				doHandling_ISLANDING_OFF();
 //			}
 
-			
+//			doHandling_OFF();
+			LIMITS();
 			if(!battery.getReadyForWorking().value().orElse(false)) {
-				doHandling_OFF();
+				Inverter_OFF();
 			} else {
-				doHandling_ON();
+				Inverter_ON();
 			}
 			
 			break;
