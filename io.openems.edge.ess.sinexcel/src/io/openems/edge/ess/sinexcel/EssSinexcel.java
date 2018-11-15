@@ -2,6 +2,7 @@ package io.openems.edge.ess.sinexcel;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
@@ -22,7 +23,6 @@ import org.slf4j.LoggerFactory;
 
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.battery.api.Battery;
-import io.openems.edge.bridge.modbus.AbstractModbusBridge;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
 import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
@@ -333,11 +333,10 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	}
 	
 	public void Inverter_ON() {
-//		timeForSystemInitialization.plusSeconds(7).isAfter(LocalDateTime.now());
 		IntegerWriteChannel SETDATA_ModOnCmd = this.channel(ChannelId.SETDATA_MOD_ON_CMD);
 		try {
 			SETDATA_ModOnCmd.setNextWriteValue(START); // Here: START = 1
-			log.info("startSystem: SETDATA_MOD_ON_CMD");
+//			log.info("startSystem: SETDATA_MOD_ON_CMD");
 		} catch (OpenemsException e) {
 			log.error("problem occurred while trying to start inverter" + e.getMessage());
 		}
@@ -345,10 +344,11 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	}
 
 	public void Inverter_OFF() {
+		a = 0;
 		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SETDATA_MOD_OFF_CMD);
 		try {
 			SETDATA_ModOffCmd.setNextWriteValue(STOP); // Here: STOP = 1
-			log.info("stopSystem: SETDATA_MOD_OFF_CMD");
+//			log.info("stopSystem: SETDATA_MOD_OFF_CMD");
 		} catch (OpenemsException e) {
 			log.error("problem occurred while trying to stop system" + e.getMessage());
 		}
@@ -802,7 +802,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	@Override
 	public Constraint[] getStaticConstraints() {
 		if(!battery.getReadyForWorking().value().orElse(false)) {
-			log.info("getStaticConstraints: Battery not ready");
+//			log.info("getStaticConstraints: Battery not ready");
 			return new Constraint[] { //
 					this.createPowerConstraint("Battery is not ready", Phase.ALL, Pwr.ACTIVE,
 							Relationship.EQUALS, 0), //
@@ -810,42 +810,31 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 							Relationship.EQUALS, 0) //
 			};
 		} else {
-			log.info("getStaticConstraints: Battery ready");
+//			log.info("getStaticConstraints: Battery ready");
 			return Power.NO_CONSTRAINTS;
 		}
 	}
 	
 	@Override
 	public void applyPower(int activePower, int reactivePower) {
-
 		IntegerWriteChannel SET_ACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_ACTIVE);
 		IntegerWriteChannel SET_REACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_REACTIVE);
-		
 
 		int reactiveValue = (int) ((reactivePower / 100));
-		if (reactiveValue > MAX_REACTIVE_POWER || reactiveValue < MAX_REACTIVE_POWER * (-1)) {
-			reactiveValue = 0;
-			log.error("Reactive power limit exceeded");
-		}
 		try {
 			SET_REACTIVE_POWER.setNextWriteValue(reactiveValue);
 			
 		} catch (OpenemsException e) {
 			log.error("EssSinexcel.applyPower(): Problem occurred while trying so set reactive power" + e.getMessage());
 		}
-
+		
 		int activeValue = (int) ((activePower / 100));
-		if (activeValue > MAX_ACTIVE_POWER || activePower < MAX_ACTIVE_POWER * (-1)) {
-			activeValue = 0;
-			log.error("Active power limit exceeded");
-		}
 		try {
 			SET_ACTIVE_POWER.setNextWriteValue(activeValue);
 			
 		} catch (OpenemsException e) {
 			log.error("EssSinexcel.applyPower(): Problem occurred while trying so set active power" + e.getMessage());
 		}
-
 	}
 
 	/**
@@ -866,6 +855,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private int STOP = 1;
 	private int OPEN = 0;
 	private int CLOSE = 1;
+	public int a;
 
 	private int SLOW_CHARGE_VOLTAGE = 3800; // Slow and Float Charge Voltage must be the same for the Lithium Ion
 											// battery.
@@ -885,9 +875,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		if (!this.isEnabled()) {
 			return;
 		}
-
-//	boolean island = Fault_Islanding();
-
+//		boolean island = Fault_Islanding();
 		switch (event.getTopic()) {
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
 
@@ -911,8 +899,19 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //			doHandling_OFF();
 			LIMITS();
 			if(!battery.getReadyForWorking().value().orElse(false)) {
-				Inverter_OFF();
-			} else {
+				a = 0;
+//				Inverter_OFF();
+			} 
+			else {
+				if(a == 0) {
+					try {
+						TimeUnit.MILLISECONDS.sleep(5000);
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					a = 1;
+				}
 				Inverter_ON();
 			}
 			
