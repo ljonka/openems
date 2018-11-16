@@ -4,7 +4,7 @@ import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
 @ObjectClassDefinition( //
-		name = "BMS FENECON Soltaro", //
+		name = "BMS FENECON Soltaro Version B", //
 		description = "Implements the Soltaro battery rack system.")
 @interface Config {
 	String service_pid();
