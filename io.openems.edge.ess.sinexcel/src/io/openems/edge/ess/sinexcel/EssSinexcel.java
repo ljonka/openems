@@ -605,7 +605,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)), // int16 // Line69 // Magnification = 100
 
 				new FC3ReadRegistersTask(0x0255, Priority.HIGH,
-						m(EssSinexcel.ChannelId.DC_Current, new SignedWordElement(0x0255))), // int16 // Line142 // Magnification = 10
+						m(EssSinexcel.ChannelId.DC_Current, new SignedWordElement(0x0255),	// int16 // Line142 // Magnification = 10
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1)), 
 
 				new FC3ReadRegistersTask(0x0257, Priority.HIGH, //
 						m(EssSinexcel.ChannelId.DC_Voltage, new UnsignedWordElement(0x0257),
@@ -896,7 +897,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //				doHandling_ISLANDING_OFF();
 //			}
 
-//			doHandling_OFF();
+			Inverter_ON();
 			LIMITS();
 			if(!battery.getReadyForWorking().value().orElse(false)) {
 				a = 0;
