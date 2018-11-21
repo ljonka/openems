@@ -79,6 +79,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		}
 		
 		doChannelMapping();
+		LIMITS();
 	}
 
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
@@ -93,6 +94,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 
 	public EssSinexcel() {
 		Utils.initializeChannels(this).forEach(channel -> this.addChannel(channel));
+		
 	}
 
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
@@ -334,20 +336,22 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	
 	public void Inverter_ON() {
 		IntegerWriteChannel SETDATA_ModOnCmd = this.channel(ChannelId.SETDATA_MOD_ON_CMD);
+//		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SETDATA_MOD_OFF_CMD);
 		try {
-			SETDATA_ModOnCmd.setNextWriteValue(START); // Here: START = 1
+			SETDATA_ModOnCmd.setNextWriteValue(1); // Here: START = 1
+//			SETDATA_ModOffCmd.setNextWriteValue(0);
 //			log.info("startSystem: SETDATA_MOD_ON_CMD");
 		} catch (OpenemsException e) {
 			log.error("problem occurred while trying to start inverter" + e.getMessage());
 		}
-
 	}
 
 	public void Inverter_OFF() {
-		a = 0;
 		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SETDATA_MOD_OFF_CMD);
+//		IntegerWriteChannel SETDATA_ModOnCmd = this.channel(ChannelId.SETDATA_MOD_ON_CMD);
 		try {
-			SETDATA_ModOffCmd.setNextWriteValue(STOP); // Here: STOP = 1
+			SETDATA_ModOffCmd.setNextWriteValue(1); // Here: STOP = 1
+//			SETDATA_ModOnCmd.setNextWriteValue(0);
 //			log.info("stopSystem: SETDATA_MOD_OFF_CMD");
 		} catch (OpenemsException e) {
 			log.error("problem occurred while trying to stop system" + e.getMessage());
@@ -445,13 +449,13 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 				new FC6WriteRegisterTask(0x028B,
 						m(EssSinexcel.ChannelId.SETDATA_MOD_OFF_CMD, new UnsignedWordElement(0x028B))), // Stop SETDATA_ModOffCmd
 
-				new FC6WriteRegisterTask(0x0290,
-						m(EssSinexcel.ChannelId.SET_INTERN_DC_RELAY, new UnsignedWordElement(0x0290))),
-
-				new FC6WriteRegisterTask(0x028D,
-						m(EssSinexcel.ChannelId.SETDATA_GRID_ON_CMD, new UnsignedWordElement(0x028D))), // Start SETDATA_GridOnCmd
-				new FC6WriteRegisterTask(0x028E,
-						m(EssSinexcel.ChannelId.SETDATA_GRID_OFF_CMD, new UnsignedWordElement(0x028E))), // Stop SETDATA_GridOffCmd
+//				new FC6WriteRegisterTask(0x0290,
+//						m(EssSinexcel.ChannelId.SET_INTERN_DC_RELAY, new UnsignedWordElement(0x0290))),
+//
+//				new FC6WriteRegisterTask(0x028D,
+//						m(EssSinexcel.ChannelId.SETDATA_GRID_ON_CMD, new UnsignedWordElement(0x028D))), // Start SETDATA_GridOnCmd
+//				new FC6WriteRegisterTask(0x028E,
+//						m(EssSinexcel.ChannelId.SETDATA_GRID_OFF_CMD, new UnsignedWordElement(0x028E))), // Stop SETDATA_GridOffCmd
 
 				new FC6WriteRegisterTask(0x0087,
 						m(EssSinexcel.ChannelId.SET_CHARGE_DISCHARGE_ACTIVE, new SignedWordElement(0x0087))), // Target ACTIVE Power //Line65
@@ -477,8 +481,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 				new FC6WriteRegisterTask(0x032D,
 						m(EssSinexcel.ChannelId.SET_LOWER_VOLTAGE, new UnsignedWordElement(0x032D))), // LOWER voltage limit of battery protection //Line219
 
-				new FC6WriteRegisterTask(0x0316,
-						m(EssSinexcel.ChannelId.SET_ANTI_ISLANDING, new UnsignedWordElement(0x0316))), // Line194
+//				new FC6WriteRegisterTask(0x0316,
+//						m(EssSinexcel.ChannelId.SET_ANTI_ISLANDING, new UnsignedWordElement(0x0316))), // Line194
 
 //----------------------------------------------------------READ------------------------------------------------------
 				new FC3ReadRegistersTask(0x024A, Priority.HIGH, //
@@ -584,17 +588,17 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //				new FC3ReadRegistersTask(0x023A, Priority.LOW, //
 //						m(EssSinexcel.ChannelId.SUNSPEC_DID_0103, new UnsignedWordElement(0x023A))), //
 //
-				new FC3ReadRegistersTask(0x028A, Priority.LOW,
-						m(EssSinexcel.ChannelId.MOD_ON_CMD, new UnsignedWordElement(0x028A))),
+//				new FC3ReadRegistersTask(0x028A, Priority.LOW,
+//						m(EssSinexcel.ChannelId.MOD_ON_CMD, new UnsignedWordElement(0x028A))),
+//
+//				new FC3ReadRegistersTask(0x028B, Priority.LOW,
+//						m(EssSinexcel.ChannelId.MOD_OFF_CMD, new UnsignedWordElement(0x028B))),
 
-				new FC3ReadRegistersTask(0x028B, Priority.LOW,
-						m(EssSinexcel.ChannelId.MOD_OFF_CMD, new UnsignedWordElement(0x028B))),
-
-				new FC3ReadRegistersTask(0x028D, Priority.LOW,
-						m(EssSinexcel.ChannelId.GRID_ON_CMD, new UnsignedWordElement(0x028D))),
-
-				new FC3ReadRegistersTask(0x028E, Priority.LOW,
-						m(EssSinexcel.ChannelId.GRID_OFF_CMD, new UnsignedWordElement(0x028E))),
+//				new FC3ReadRegistersTask(0x028D, Priority.LOW,
+//						m(EssSinexcel.ChannelId.GRID_ON_CMD, new UnsignedWordElement(0x028D))),
+//
+//				new FC3ReadRegistersTask(0x028E, Priority.LOW,
+//						m(EssSinexcel.ChannelId.GRID_OFF_CMD, new UnsignedWordElement(0x028E))),
 
 				new FC3ReadRegistersTask(0x0316, Priority.LOW,
 						m(EssSinexcel.ChannelId.ANTI_ISLANDING, new UnsignedWordElement(0x0316))),
@@ -799,6 +803,15 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 
 //------------------------------------------------------------------------------------------------------------------------
 	
+	@Override
+	public String debugLog() {
+		return "\nState:\t\t" + this.channel(ChannelId.Sinexcel_State).value().asString() //
+				+ "\nDC Power:\t" + this.channel(ChannelId.DC_Power).value()
+				+ "\nDC Current:\t" + this.channel(ChannelId.DC_Current).value()
+				+ "\nDC Voltage:\t" + this.channel(ChannelId.DC_Voltage).value()
+				+ "\nON_CMD:\t\t" + this.channel(ChannelId.MOD_ON_CMD).value()
+				+ "\nOFF_CMD:\t" + this.channel(ChannelId.MOD_OFF_CMD).value(); //
+	}
 	
 	@Override
 	public Constraint[] getStaticConstraints() {
@@ -856,8 +869,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private int STOP = 1;
 	private int OPEN = 0;
 	private int CLOSE = 1;
-	public int a;
-
+	boolean a = true;
+	int b = 0;
 	private int SLOW_CHARGE_VOLTAGE = 3800; // Slow and Float Charge Voltage must be the same for the Lithium Ion
 											// battery.
 	private int FLOAT_CHARGE_VOLTAGE = 3800;
@@ -870,6 +883,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //	private int ACTIVE = 0;							// [ACTIVE] = kW	// Range = -30 kW ... 30 kW	// ACTIVE < 0 -> CHARGE //	ACTIVE > 0 ->DISCHARGE 
 //	private int REACTIVE = 0;						// [REACTIVE] = kVAr	// Range = -30 kW ... 30 //REACTIVE < 0 -> inductive // REACTIVE > 0 -> capacitive
 	
+	
 
 	@Override
 	public void handleEvent(Event event) {
@@ -879,47 +893,34 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //		boolean island = Fault_Islanding();
 		switch (event.getTopic()) {
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-
-//			if(battery.getReadyForWorking().value().orElse(false)) {
-//				doHandling_ON();
-//				log.error("TEST" + this.channel(ChannelId.Model).value());
-//			}
-//			else if (!battery.getReadyForWorking().value().orElse(false)) {
-//				doHandling_OFF();
-//			}
+			if(battery.getReadyForWorking().value().orElse(false)) {
+				a = true;
+			}
+			if(!battery.getReadyForWorking().value().orElse(false) ) {
+				a = false;
+			}
 			
+			if (a == true) {
+				Inverter_ON();
+				log.info("------------>Inverter is starting");
+			}
+			else if(a == false)  {
+				Inverter_OFF();
+				log.info("----------->Battery is not ready");
+			}
+		
 //			DcRelay();
 			
 //			if(island = true) {
-//				doHandling_ISLANDING_ON();
+//				ISLANDING_ON();
 //			}
 //			else if(island = false) {
-//				doHandling_ISLANDING_OFF();
+//				ISLANDING_OFF();
 //			}
-
-			Inverter_ON();
-			LIMITS();
-			if(!battery.getReadyForWorking().value().orElse(false)) {
-				a = 0;
-//				Inverter_OFF();
-			} 
-			else {
-				if(a == 0) {
-					try {
-						TimeUnit.MILLISECONDS.sleep(5000);
-					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-					a = 1;
-				}
-				Inverter_ON();
-			}
 			
 			break;
 		}
 	}
-
 	@Override
 	public Power getPower() { // Siehe KACO
 		return this.power;
