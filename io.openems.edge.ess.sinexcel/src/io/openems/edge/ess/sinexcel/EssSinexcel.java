@@ -859,10 +859,10 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	
 	static private boolean a = true;
 	
-	private static final int SLOW_CHARGE_VOLTAGE = 3800; // Slow and Float Charge Voltage must be the same for the Lithium Ionbattery.
-	private static final int FLOAT_CHARGE_VOLTAGE = 3800;
+	private static final int SLOW_CHARGE_VOLTAGE = 3930; // Slow and Float Charge Voltage must be the same for the Lithium Ionbattery.
+	private static final int FLOAT_CHARGE_VOLTAGE = 3930;
 	private static final int LOWER_BAT_VOLTAGE = 2950;	
-	private static final int UPPER_BAT_VOLTAGE = 3900;
+	private static final int UPPER_BAT_VOLTAGE = 3950;
 
 	private static final int CHARGE_CURRENT = 900; // [CHARGE_CURRENT] = A // Range = 0 A ... 90 A
 	private static final int DISCHARGE_CURRENT = 900; // [DISCHARGE_CURRENT] = A // Range = 0 A ... 90 A
