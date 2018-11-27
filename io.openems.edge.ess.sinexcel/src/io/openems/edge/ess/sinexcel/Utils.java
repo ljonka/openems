@@ -146,6 +146,10 @@ public class Utils {
 					case DIS_MIN_V:
 					case EN_LIMIT:
 					case SET_INTERN_DC_RELAY:
+					case SET_Analog_CHARGE_Energy:
+					case SET_Analog_DISCHARGE_Energy:
+					case SET_Analog_DC_CHARGE_Energy:
+					case SET_Analog_DC_DISCHARGE_Energy:
 						return new IntegerWriteChannel(ess, channelId);
 						
 					case Serial:
