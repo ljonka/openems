@@ -51,7 +51,11 @@ public class Utils {
 
 					case ALLOWED_DISCHARGE_POWER:	
 						return new IntegerReadChannel(ess, channelId, 30000);
-					
+
+					case SET_ACTIVE_POWER_EQUALS:
+					case SET_ACTIVE_POWER_LESS_OR_EQUALS:
+					case SET_REACTIVE_POWER_EQUALS:
+						return new IntegerWriteChannel(ess, channelId);
 					}
 					return null;
 				}), Arrays.stream(EssSinexcel.ChannelId.values()).map(channelId -> {

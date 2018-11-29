@@ -41,6 +41,7 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 	private int voltage;
 	private int minCellVoltage_mV;
 	private boolean ReadyForWork;
+	private int maximalPower_W;
 
 	public BatteryDummy() {
 		Utils.initializeChannels(this).forEach(channel -> this.addChannel(channel));
@@ -60,6 +61,7 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 		voltage = config.voltage();
 		minCellVoltage_mV = config.minCellVoltage_mV();
 		ReadyForWork = config.ReadyForWork();
+		maximalPower_W = config.maximalPower_W();
 	}
 
 	@Override
@@ -83,6 +85,7 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 		IntegerWriteChannel voltageChannel = this.channel(Battery.ChannelId.VOLTAGE);
 		IntegerWriteChannel minCellVoltageChannel = this.channel(Battery.ChannelId.MINIMAL_CELL_VOLTAGE);
 		BooleanWriteChannel ReadyForWorkChannel = this.channel(Battery.ChannelId.READY_FOR_WORKING);
+		IntegerWriteChannel maxPowerChannel = this.channel(Battery.ChannelId.MAXIMAL_POWER);
 
 		try {
 			disChargeMinVoltageChannel.setNextWriteValue(disChargeMinVoltage);
@@ -102,6 +105,8 @@ public class BatteryDummy extends AbstractOpenemsComponent implements Battery, O
 			voltageChannel.setNextValue(voltage);
 			minCellVoltageChannel.setNextValue(minCellVoltage_mV);
 			ReadyForWorkChannel.setNextValue(ReadyForWork);
+			
+			maxPowerChannel.setNextValue(maximalPower_W);
 
 		} catch (OpenemsException e) {
 			log.error("Error occurred while writing channel values! " + e.getMessage());

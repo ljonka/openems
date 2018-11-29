@@ -2,7 +2,7 @@ package io.openems.edge.simulator.battery;
 
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
-@ObjectClassDefinition( //
+@ObjectClassDefinition(//
 		name = "BMS Simulated", //
 		description = "Implements a simulated battery management system that sends values given in the configuration")
 @interface Config {
@@ -19,6 +19,7 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	int disChargeMaxCurrent();
 	
 	int chargeMaxCurrent();
+	
 	int soc() default 50;
 	
 	int soh() default 95;
@@ -32,8 +33,8 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	int minCellVoltage_mV() default 3300;
 	
 	boolean ReadyForWork() default true;
+
+	int maximalPower_W() default 50000;
 	
 	String webconsole_configurationFactory_nameHint() default "BMS Simulated [{id}]";
-
-
 }

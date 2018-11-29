@@ -14,7 +14,7 @@ public class Utils {
 	public static Stream<? extends Channel<?>> initializeChannels(BatteryDummy s) {
 		// Define the channels. Using streams + switch enables Eclipse IDE to tell us if
 		// we are missing an Enum value.
-		return Stream.of( //
+		return Stream.of(//
 				Arrays.stream(OpenemsComponent.ChannelId.values()).map(channelId -> {
 					switch (channelId) {
 					case STATE:
@@ -33,6 +33,7 @@ public class Utils {
 					case DISCHARGE_MAX_CURRENT:
 					case DISCHARGE_MIN_VOLTAGE:
 					case MINIMAL_CELL_VOLTAGE:
+					case MAXIMAL_POWER:
 					case VOLTAGE:
 						return new IntegerWriteChannel(s, channelId);					
 					case READY_FOR_WORKING:
