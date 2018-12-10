@@ -18,6 +18,10 @@ public enum Unit {
 	 */
 	PERCENT("%"),
 	/**
+	 * Thousandth [‰], 0-1000
+	 */
+	THOUSANDTH("‰"),
+	/**
 	 * On or Off
 	 */
 	ON_OFF(""),
@@ -87,6 +91,19 @@ public enum Unit {
 	KILOWATT_HOURS("kWh", WATT_HOURS, 3),
 
 	/*
+	 * Charge
+	 */
+
+	/**
+	 * Unit of charge [Ah]
+	 */
+	AMPERE_HOUR("Ah"),
+	/**
+	 * Unit of charge [mAh]
+	 */
+	MILLIAMPERE_HOUR("mAh", AMPERE_HOUR, -3),
+	
+	/*
 	 * Frequency
 	 */
 
@@ -136,7 +153,15 @@ public enum Unit {
 	/**
 	 * Unit of Resistance [kOhm]
 	 */
-	KILOOHM("kOhm", OHM, 3);
+	KILOOHM("kOhm", OHM, 3),	
+	/**
+	 * Unit of Resistance [mOhm]
+	 */
+	MILLIOHM("mOhm", OHM, -3),
+	/**
+	 * Unit of Resistance [µOhm]
+	 */
+	MIKROOHM("µOhm", OHM, -6);
 
 	private final Unit baseUnit;
 	private final int scaleFactor;

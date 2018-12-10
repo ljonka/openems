@@ -1,4 +1,4 @@
-package io.openems.edge.battery.soltaro;
+package io.openems.edge.battery.soltaro.versionb;
 
 import io.openems.edge.common.channel.doc.OptionsEnum;
 
@@ -167,4 +167,74 @@ public class VersionBEnums {
 			return option;
 		}
 	}
+
+	public enum ChargeIndication implements OptionsEnum {
+
+		STANDING(0, "Standing"), DISCHARGING(1, "Discharging"), CHARGING(2, "Charging");
+
+		private int value;
+		private String option;
+
+		private ChargeIndication(int value, String option) {
+			this.value = value;
+			this.option = option;
+		}
+
+		@Override
+		public int getValue() {
+			return value;
+		}
+
+		@Override
+		public String getOption() {
+			return option;
+		}
+	}
+
+	public enum ContactorControl implements OptionsEnum {
+
+		CUT_OFF(0, "Cut off"), CONNECTION_INITIATING(1, "Connection initiating"), ON_GRID(3, "On grid");
+
+		int value;
+		String option;
+
+		private ContactorControl(int value, String option) {
+			this.value = value;
+			this.option = option;
+		}
+
+		@Override
+		public int getValue() {
+			return value;
+		}
+
+		@Override
+		public String getOption() {
+			return option;
+		}
+	}
+
+	public enum ClusterRunState implements OptionsEnum {
+
+		NORMAL(0, "Normal"), FULL(1, "Full"), EMPTY(2, "Empty"),
+		STANDBY(3, "Standby"), STOP(4, "Stop");
+
+		private int value;
+		private String option;
+
+		private ClusterRunState(int value, String option) {
+			this.value = value;
+			this.option = option;
+		}
+
+		@Override
+		public int getValue() {
+			return value;
+		}
+
+		@Override
+		public String getOption() {
+			return option;
+		}
+}
 }
