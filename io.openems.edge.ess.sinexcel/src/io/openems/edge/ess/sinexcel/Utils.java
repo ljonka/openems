@@ -108,14 +108,9 @@ public class Utils {
 					case InvOutCurrent_L2:
 					case InvOutCurrent_L3:
 					case DC_Current:
-
 					case DC_Power:
-					
-					
 					case Sinexcel_State:
 					case EVENT_1:
-					
-				
 					case Test_Register:
 					case Max_Discharge_Current:
 					case Max_Charge_Current:

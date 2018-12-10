@@ -42,5 +42,5 @@ public class Utils {
 					return null;
 				})
 		).flatMap(channel -> channel);
-	}
+	} 
 }

@@ -184,9 +184,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		AC_Reactive_Power(new Doc().unit(Unit.VOLT_AMPERE_REACTIVE)), //
 		AC_Power(new Doc().unit(Unit.WATT)), //
 
-		InvOutVolt_L1(new Doc().unit(Unit.VOLT)), //
-		InvOutVolt_L2(new Doc().unit(Unit.VOLT)), //
-		InvOutVolt_L3(new Doc().unit(Unit.VOLT)), //
+		InvOutVolt_L1(new Doc().unit(Unit.VOLT)), 
+		InvOutVolt_L2(new Doc().unit(Unit.VOLT)), 
+		InvOutVolt_L3(new Doc().unit(Unit.VOLT)), 
 		InvOutCurrent_L1(new Doc().unit(Unit.AMPERE)), //
 		InvOutCurrent_L2(new Doc().unit(Unit.AMPERE)), //
 		InvOutCurrent_L3(new Doc().unit(Unit.AMPERE)), //
@@ -202,8 +202,10 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 
 		Target_Active_Power(new Doc().unit(Unit.KILO_WATT)), //
 		Target_Reactive_Power(new Doc().unit(Unit.KILO_WATT)), //
-		Max_Charge_Current(new Doc().unit(Unit.AMPERE)), Max_Discharge_Current(new Doc().unit(Unit.AMPERE)),
-		Lower_Voltage_Limit(new Doc().unit(Unit.VOLT)), Upper_Voltage_Limit(new Doc().unit(Unit.VOLT)),
+		Max_Charge_Current(new Doc().unit(Unit.AMPERE)), 
+		Max_Discharge_Current(new Doc().unit(Unit.AMPERE)),
+		Lower_Voltage_Limit(new Doc().unit(Unit.VOLT)), 
+		Upper_Voltage_Limit(new Doc().unit(Unit.VOLT)),
 //---------------------------------------STATES------------------------------------------------		
 		Sinexcel_STATE_1(new Doc().level(Level.INFO).text("OFF")), //
 		Sinexcel_STATE_2(new Doc().level(Level.INFO).text("Sleeping")), //
