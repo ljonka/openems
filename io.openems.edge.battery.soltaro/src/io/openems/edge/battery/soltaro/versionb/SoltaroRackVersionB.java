@@ -32,6 +32,7 @@ import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
+import io.openems.edge.common.channel.BooleanReadChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.component.OpenemsComponent;
@@ -61,12 +62,14 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 
 	private static final int SECURITY_INTERVAL_FOR_COMMANDS_IN_SECONDS = 3;
 	private static final int MAX_TIME_FOR_INITIALIZATION_IN_SECONDS = 30;
+	
 	public static final Integer CAPACITY_KWH = 50;
 
 	private final Logger log = LoggerFactory.getLogger(SoltaroRackVersionB.class);
 
 	private String modbusBridgeId;
 	private BatteryState batteryState;
+	private int secondsToWaitAlarmLevel2 = 600;
 
 	@Reference
 	protected ConfigurationAdmin cm;
@@ -93,6 +96,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 		this.modbusBridgeId = config.modbus_id();
 
 		this.batteryState = config.batteryState();
+		this.secondsToWaitAlarmLevel2 = config.secondsToWaitAlarmLevel2();
 		initializeCallbacks();
 	}
 
@@ -101,7 +105,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 		super.deactivate();
 	}
 
-	private void initializeCallbacks() {
+	private <T> void initializeCallbacks() {
 		this.channel(VersionBChannelId.BMS_CONTACTOR_CONTROL).onChange(value -> {
 			Optional<Enum<?>> ccOpt = value.asEnumOptional();
 			if (!ccOpt.isPresent()) {
@@ -148,12 +152,15 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 			int voltage_millivolt = vOpt.get();
 			this.channel(Battery.ChannelId.MINIMAL_CELL_VOLTAGE).setNextValue(voltage_millivolt);
 		});
-		
-		// Battery ranges 
-		// ==> CHARGE_MAX_VOLTAGE 0x2042 (m(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_PROTECTION)
-		// ==> DISCHARGE_MIN_VOLTAGE 0x2048 (VersionBChannelId.STOP_PARAMETER_SYSTEM_UNDER_VOLTAGE_PROTECTION)
+
+		// Battery ranges
+		// ==> CHARGE_MAX_VOLTAGE 0x2042
+		// (m(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_PROTECTION)
+		// ==> DISCHARGE_MIN_VOLTAGE 0x2048
+		// (VersionBChannelId.STOP_PARAMETER_SYSTEM_UNDER_VOLTAGE_PROTECTION)
 		// ==> CHARGE_MAX_CURRENT 0x2160 (VersionBChannelId.SYSTEM_MAX_CHARGE_CURRENT)
-		// ==> DISCHARGE_MAX_CURRENT 0x2161 (VersionBChannelId.SYSTEM_MAX_DISCHARGE_CURRENT)
+		// ==> DISCHARGE_MAX_CURRENT 0x2161
+		// (VersionBChannelId.SYSTEM_MAX_DISCHARGE_CURRENT)
 		this.channel(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_PROTECTION).onChange(value -> {
 			@SuppressWarnings("unchecked")
 			Optional<Integer> vOpt = (Optional<Integer>) value.asOptional();
@@ -163,7 +170,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 			int max_charge_voltage = (int) (vOpt.get() * 0.001);
 			this.channel(Battery.ChannelId.CHARGE_MAX_VOLTAGE).setNextValue(max_charge_voltage);
 		});
-		
+
 		this.channel(VersionBChannelId.STOP_PARAMETER_SYSTEM_UNDER_VOLTAGE_PROTECTION).onChange(value -> {
 			@SuppressWarnings("unchecked")
 			Optional<Integer> vOpt = (Optional<Integer>) value.asOptional();
@@ -173,7 +180,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 			int min_discharge_voltage = (int) (vOpt.get() * 0.001);
 			this.channel(Battery.ChannelId.DISCHARGE_MIN_VOLTAGE).setNextValue(min_discharge_voltage);
 		});
-		
+
 		this.channel(VersionBChannelId.SYSTEM_MAX_CHARGE_CURRENT).onChange(value -> {
 			@SuppressWarnings("unchecked")
 			Optional<Integer> cOpt = (Optional<Integer>) value.asOptional();
@@ -183,7 +190,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 			int max_current = (int) (cOpt.get() * 0.001);
 			this.channel(Battery.ChannelId.CHARGE_MAX_CURRENT).setNextValue(max_current);
 		});
-		
+
 		this.channel(VersionBChannelId.SYSTEM_MAX_DISCHARGE_CURRENT).onChange(value -> {
 			@SuppressWarnings("unchecked")
 			Optional<Integer> cOpt = (Optional<Integer>) value.asOptional();
@@ -193,6 +200,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 			int max_current = (int) (cOpt.get() * 0.001);
 			this.channel(Battery.ChannelId.DISCHARGE_MAX_CURRENT).setNextValue(max_current);
 		});
+		
 	}
 
 	@Override
@@ -216,6 +224,12 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 			lastCommandSent = LocalDateTime.now();
 		}
 
+		// If alarm 2 exists, just stop system to save the rack
+		if (isAlarmLevel2()) {
+			stopSystem();
+			return;
+		}
+
 		switch (this.batteryState) {
 		case DEFAULT:
 			checkSystemState();
@@ -227,6 +241,34 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 			startSystem();
 			break;
 		}
+	}
+
+	private boolean isAlarmLevel2() {
+		return (
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_HIGH) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_HIGH) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CHA_CURRENT_HIGH) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_LOW) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_LOW) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_DISCHA_CURRENT_HIGH) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_CHA_TEMP_HIGH) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_CHA_TEMP_LOW) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_SOC_LOW) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TEMPERATURE_DIFFERENCE_HIGH) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_POLES_TEMPERATURE_DIFFERENCE_HIGH) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_DIFFERENCE_HIGH) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_INSULATION_LOW) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_DIFFERENCE_HIGH) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_DISCHA_TEMP_HIGH) ||
+				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_DISCHA_TEMP_LOW) 
+		);
+	}
+	
+	
+	private boolean readValueFromChannel(VersionBChannelId channelId) {
+		BooleanReadChannel r = this.channel(channelId);
+		Optional<Boolean> bOpt = r.value().asOptional();
+		return bOpt.isPresent() && bOpt.get();
 	}
 
 	private void checkSystemState() {
@@ -315,26 +357,24 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 	@Override
 	protected ModbusProtocol defineModbusProtocol() {
 		return new ModbusProtocol(this, //
-				
+
 				// Main switch
 				new FC6WriteRegisterTask(0x2010,
 						m(VersionBChannelId.BMS_CONTACTOR_CONTROL, new UnsignedWordElement(0x2010)) //
 				),
-				
+
 				// System reset
-				new FC6WriteRegisterTask(0x2004,
-						m(VersionBChannelId.SYSTEM_RESET, new UnsignedWordElement(0x2004)) //
+				new FC6WriteRegisterTask(0x2004, m(VersionBChannelId.SYSTEM_RESET, new UnsignedWordElement(0x2004)) //
 				),
-				
+
 				// EMS timeout --> Watchdog
 				new FC6WriteRegisterTask(0x201C,
 						m(VersionBChannelId.EMS_COMMUNICATION_TIMEOUT, new UnsignedWordElement(0x201C)) //
 				),
 				// Sleep
-				new FC6WriteRegisterTask(0x201D,
-						m(VersionBChannelId.SLEEP, new UnsignedWordElement(0x201D)) //
+				new FC6WriteRegisterTask(0x201D, m(VersionBChannelId.SLEEP, new UnsignedWordElement(0x201D)) //
 				),
-				
+
 				// Stop parameter
 				new FC16WriteRegistersTask(0x2040, //
 						m(VersionBChannelId.STOP_PARAMETER_CELL_OVER_VOLTAGE_PROTECTION,
@@ -342,8 +382,8 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 						m(VersionBChannelId.STOP_PARAMETER_CELL_OVER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2041)), //
 						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_PROTECTION,
 								new UnsignedWordElement(0x2042), ElementToChannelConverter.SCALE_FACTOR_2), //
-						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_RECOVER, 
-								new UnsignedWordElement(0x2043), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2043),
+								ElementToChannelConverter.SCALE_FACTOR_2), //
 						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_PROTECTION,
 								new UnsignedWordElement(0x2044), ElementToChannelConverter.SCALE_FACTOR_2), //
 						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_RECOVER,
@@ -400,7 +440,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 						m(VersionBChannelId.STOP_PARAMETER_TEMPERATURE_DIFFERENCE_PROTECTION_RECOVER,
 								new UnsignedWordElement(0x2061)) //
 				),
-				
+
 //				//Warn parameter
 //				new FC16WriteRegistersTask(0x2080, //
 //						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_VOLTAGE_ALARM,
@@ -467,8 +507,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 //						m(VersionBChannelId.WARN_PARAMETER_TEMPERATURE_DIFFERENCE_ALARM_RECOVER,
 //								new UnsignedWordElement(0x20A2)) //
 //				),
-				
-				
+
 				// Control registers
 				new FC3ReadRegistersTask(0x2000, Priority.HIGH, //
 						m(VersionBChannelId.FAN_STATUS, new UnsignedWordElement(0x2000)), //
@@ -479,41 +518,41 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 						m(VersionBChannelId.SYSTEM_RUN_MODE, new UnsignedWordElement(0x2005)), //
 						m(VersionBChannelId.PRE_CONTACTOR_STATUS, new UnsignedWordElement(0x2006)), //
 						bm(new UnsignedWordElement(0x2007)) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_DISCHARGE_TEMPERATURE_LOW, 15) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_DISCHARGE_TEMPERATURE_HIGH, 14) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_VOLTAGE_DIFFERENCE, 13) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_INSULATION_LOW, 12) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_CELL_VOLTAGE_DIFFERENCE, 11) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_ELECTRODE_TEMPERATURE_HIGH, 10) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_TEMPERATURE_DIFFERENCE, 9) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_SOC_LOW, 8) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_CELL_OVER_TEMPERATURE, 7) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_CELL_LOW_TEMPERATURE, 6) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_DISCHARGE_OVER_CURRENT, 5) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_SYSTEM_LOW_VOLTAGE, 4) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_CELL_LOW_VOLTAGE, 3) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_CHARGE_OVER_CURRENT, 2) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_SYSTEM_OVER_VOLTAGE, 1) //
-						.m(VersionBChannelId.ALARM_FLAG_STATUS_CELL_OVER_VOLTAGE, 0) //
-						.build(), //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_DISCHARGE_TEMPERATURE_LOW, 15) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_DISCHARGE_TEMPERATURE_HIGH, 14) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_VOLTAGE_DIFFERENCE, 13) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_INSULATION_LOW, 12) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_CELL_VOLTAGE_DIFFERENCE, 11) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_ELECTRODE_TEMPERATURE_HIGH, 10) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_TEMPERATURE_DIFFERENCE, 9) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_SOC_LOW, 8) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_CELL_OVER_TEMPERATURE, 7) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_CELL_LOW_TEMPERATURE, 6) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_DISCHARGE_OVER_CURRENT, 5) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_SYSTEM_LOW_VOLTAGE, 4) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_CELL_LOW_VOLTAGE, 3) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_CHARGE_OVER_CURRENT, 2) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_SYSTEM_OVER_VOLTAGE, 1) //
+								.m(VersionBChannelId.ALARM_FLAG_STATUS_CELL_OVER_VOLTAGE, 0) //
+								.build(), //
 						bm(new UnsignedWordElement(0x2008)) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_DISCHARGE_TEMPERATURE_LOW, 15) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_DISCHARGE_TEMPERATURE_HIGH, 14) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_VOLTAGE_DIFFERENCE, 13) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_INSULATION_LOW, 12) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_CELL_VOLTAGE_DIFFERENCE, 11) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_ELECTRODE_TEMPERATURE_HIGH, 10) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_TEMPERATURE_DIFFERENCE, 9) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_SOC_LOW, 8) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_CELL_OVER_TEMPERATURE, 7) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_CELL_LOW_TEMPERATURE, 6) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_DISCHARGE_OVER_CURRENT, 5) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_SYSTEM_LOW_VOLTAGE, 4) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_CELL_LOW_VOLTAGE, 3) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_CHARGE_OVER_CURRENT, 2) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_SYSTEM_OVER_VOLTAGE, 1) //
-						.m(VersionBChannelId.PROTECT_FLAG_STATUS_CELL_OVER_VOLTAGE, 0) //
-						.build(), //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_DISCHARGE_TEMPERATURE_LOW, 15) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_DISCHARGE_TEMPERATURE_HIGH, 14) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_VOLTAGE_DIFFERENCE, 13) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_INSULATION_LOW, 12) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_CELL_VOLTAGE_DIFFERENCE, 11) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_ELECTRODE_TEMPERATURE_HIGH, 10) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_TEMPERATURE_DIFFERENCE, 9) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_SOC_LOW, 8) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_CELL_OVER_TEMPERATURE, 7) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_CELL_LOW_TEMPERATURE, 6) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_DISCHARGE_OVER_CURRENT, 5) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_SYSTEM_LOW_VOLTAGE, 4) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_CELL_LOW_VOLTAGE, 3) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_CHARGE_OVER_CURRENT, 2) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_SYSTEM_OVER_VOLTAGE, 1) //
+								.m(VersionBChannelId.PROTECT_FLAG_STATUS_CELL_OVER_VOLTAGE, 0) //
+								.build(), //
 						m(VersionBChannelId.ALARM_FLAG_REGISTER_1, new UnsignedWordElement(0x2009)), //
 						m(VersionBChannelId.ALARM_FLAG_REGISTER_2, new UnsignedWordElement(0x200A)), //
 						m(VersionBChannelId.PROTECT_FLAG_REGISTER_1, new UnsignedWordElement(0x200B)), //
@@ -526,7 +565,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 						m(VersionBChannelId.PCS_ALARM_RESET, new UnsignedWordElement(0x2012)), //
 						m(VersionBChannelId.INSULATION_SENSOR_FUNCTION, new UnsignedWordElement(0x2013)), //
 						m(VersionBChannelId.AUTO_SET_SLAVES_ID, new UnsignedWordElement(0x2014)), //
-						new DummyRegisterElement(0x2015, 0x2018), //						
+						new DummyRegisterElement(0x2015, 0x2018), //
 						m(VersionBChannelId.AUTO_SET_SLAVES_TEMPERATURE_ID, new UnsignedWordElement(0x2019)), //
 						m(VersionBChannelId.TRANSPARENT_MASTER, new UnsignedWordElement(0x201A)), //
 						m(VersionBChannelId.SET_EMS_ADDRESS, new UnsignedWordElement(0x201B)), //
@@ -534,7 +573,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 						m(VersionBChannelId.SLEEP, new UnsignedWordElement(0x201D)), //
 						m(VersionBChannelId.VOLTAGE_LOW_PROTECTION, new UnsignedWordElement(0x201E)) //
 				), //
-				
+
 				// Stop parameter
 				new FC3ReadRegistersTask(0x2040, Priority.LOW, //
 						m(VersionBChannelId.STOP_PARAMETER_CELL_OVER_VOLTAGE_PROTECTION,
@@ -542,8 +581,8 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 						m(VersionBChannelId.STOP_PARAMETER_CELL_OVER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2041)), //
 						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_PROTECTION,
 								new UnsignedWordElement(0x2042), ElementToChannelConverter.SCALE_FACTOR_2), //
-						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_RECOVER, 
-								new UnsignedWordElement(0x2043), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2043),
+								ElementToChannelConverter.SCALE_FACTOR_2), //
 						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_PROTECTION,
 								new UnsignedWordElement(0x2044), ElementToChannelConverter.SCALE_FACTOR_2), //
 						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_RECOVER,
@@ -600,7 +639,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 						m(VersionBChannelId.STOP_PARAMETER_TEMPERATURE_DIFFERENCE_PROTECTION_RECOVER,
 								new UnsignedWordElement(0x2061)) //
 				),
-				
+
 //				// Warn parameter
 //				new FC3ReadRegistersTask(0x2080, Priority.LOW, //
 //						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_VOLTAGE_ALARM,
@@ -683,10 +722,10 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 						new DummyRegisterElement(0x20CA, 0x20CB),
 						m(VersionBChannelId.WORK_PARAMETER_SYSTEM_CAPACITY, new UnsignedWordElement(0x20CC)), //
 						new DummyRegisterElement(0x20CD, 0x20DE),
-						m(VersionBChannelId.WORK_PARAMETER_SYSTEM_SOC, new UnsignedWordElement(0x20DF)), //						
+						m(VersionBChannelId.WORK_PARAMETER_SYSTEM_SOC, new UnsignedWordElement(0x20DF)), //
 						m(VersionBChannelId.WORK_PARAMETER_SYSTEM_SOH_DEFAULT_VALUE, new UnsignedWordElement(0x20E0)) //
 				),
-				
+
 				// Summary state
 				new FC3ReadRegistersTask(0x2100, Priority.LOW,
 						m(VersionBChannelId.CLUSTER_1_VOLTAGE, new UnsignedWordElement(0x2100),
@@ -783,8 +822,10 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 						new DummyRegisterElement(0x2154, 0x215A), //
 						m(VersionBChannelId.OTHER_ALARM_EQUIPMENT_FAILURE, new UnsignedWordElement(0x215B)), //
 						new DummyRegisterElement(0x215C, 0x215F), //
-						m(VersionBChannelId.SYSTEM_MAX_CHARGE_CURRENT, new UnsignedWordElement(0x2160), ElementToChannelConverter.SCALE_FACTOR_2), // 
-						m(VersionBChannelId.SYSTEM_MAX_DISCHARGE_CURRENT, new UnsignedWordElement(0x2161), ElementToChannelConverter.SCALE_FACTOR_2) //
+						m(VersionBChannelId.SYSTEM_MAX_CHARGE_CURRENT, new UnsignedWordElement(0x2160),
+								ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.SYSTEM_MAX_DISCHARGE_CURRENT, new UnsignedWordElement(0x2161),
+								ElementToChannelConverter.SCALE_FACTOR_2) //
 				), //
 
 				// Cluster info
@@ -1239,9 +1280,9 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 						m(VersionBChannelId.CLUSTER_1_BATTERY_117_TEMPERATURE, new UnsignedWordElement(0x2C75)), //
 						m(VersionBChannelId.CLUSTER_1_BATTERY_118_TEMPERATURE, new UnsignedWordElement(0x2C76)), //
 						m(VersionBChannelId.CLUSTER_1_BATTERY_119_TEMPERATURE, new UnsignedWordElement(0x2C77)) //
-				),//
-				
-				new FC3ReadRegistersTask(0x2C78, Priority.LOW, 
+				), //
+
+				new FC3ReadRegistersTask(0x2C78, Priority.LOW,
 						m(VersionBChannelId.CLUSTER_1_BATTERY_120_TEMPERATURE, new UnsignedWordElement(0x2C78)), //
 						m(VersionBChannelId.CLUSTER_1_BATTERY_121_TEMPERATURE, new UnsignedWordElement(0x2C79)), //
 						m(VersionBChannelId.CLUSTER_1_BATTERY_122_TEMPERATURE, new UnsignedWordElement(0x2C7A)), //
@@ -1363,8 +1404,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 						m(VersionBChannelId.CLUSTER_1_BATTERY_238_TEMPERATURE, new UnsignedWordElement(0x2CEE)), //
 						m(VersionBChannelId.CLUSTER_1_BATTERY_239_TEMPERATURE, new UnsignedWordElement(0x2CEF)) //
 				)
-				
-				
+
 //				new FC3ReadRegistersTask(0x2042, Priority.HIGH, //
 //						m(Battery.ChannelId.CHARGE_MAX_VOLTAGE, new UnsignedWordElement(0x2042), //
 //								ElementToChannelConverter.SCALE_FACTOR_MINUS_1) //
@@ -1454,7 +1494,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 //								.m(VersionBChannelId.FAILURE_INITIALIZATION, 12)//
 //								.build() //
 //				), //
-				
+
 		); //
 	}
 }
