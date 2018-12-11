@@ -121,6 +121,10 @@ public class Utils {
 					case DEBUG_EN_LIMIT:
 					case BAT_MIN_CELL_VOLTAGE:
 					case BAT_VOLTAGE:
+					case DEBUG_DIS_MAX_A:
+					case DEBUG_CHA_MAX_A:
+					case DEBUG_CHA_MAX_V:
+					case DEBUG_DIS_MIN_V:
 		
 						return new IntegerReadChannel(ess, channelId);
 					case SETDATA_MOD_ON_CMD:
@@ -248,12 +252,6 @@ public class Utils {
 					case STATE_73:
 					case STATE_74:
 						return new StateChannel(ess, channelId);
-					
-					
-					
-					
-					
-						
 					}
 					return null;
 				}) //

@@ -121,11 +121,53 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		SET_Analog_DC_CHARGE_Energy(new Doc().unit(Unit.KILOWATT_HOURS)),
 		SET_Analog_DC_DISCHARGE_Energy(new Doc().unit(Unit.KILOWATT_HOURS)),
 
-		BAT_MIN_CELL_VOLTAGE(new Doc().unit(Unit.MILLIVOLT)), BAT_VOLTAGE(new Doc().unit(Unit.VOLT)),
-		BAT_TEMP(new Doc().unit(Unit.DEGREE_CELSIUS)), BAT_SOC(new Doc().unit(Unit.PERCENT)),
-		BAT_SOH(new Doc().unit(Unit.PERCENT)), DIS_MIN_V(new Doc().unit(Unit.VOLT)),
-		DIS_MAX_A(new Doc().unit(Unit.AMPERE)), CHA_MAX_A(new Doc().unit(Unit.AMPERE)),
-		CHA_MAX_V(new Doc().unit(Unit.VOLT)), DEBUG_EN_LIMIT(new Doc()), @SuppressWarnings("unchecked")
+		BAT_MIN_CELL_VOLTAGE(new Doc().unit(Unit.MILLIVOLT)), 
+		BAT_VOLTAGE(new Doc().unit(Unit.VOLT)),
+		BAT_TEMP(new Doc().unit(Unit.DEGREE_CELSIUS)), 
+		BAT_SOC(new Doc().unit(Unit.PERCENT)),
+		BAT_SOH(new Doc().unit(Unit.PERCENT)),
+		
+		DEBUG_DIS_MIN_V(new Doc().unit(Unit.VOLT)),
+		@SuppressWarnings("unchecked")
+		DIS_MIN_V(new Doc().unit(Unit.VOLT)
+				.onInit(channel -> { //
+					// on each setNextWrite to the channel -> store the value in the DEBUG-channel
+					((WriteChannel<Integer>) channel).onSetNextWrite(value -> {
+						channel.getComponent().channel(ChannelId.DEBUG_DIS_MIN_V).setNextValue(value);
+					});
+				})),
+		DEBUG_CHA_MAX_V(new Doc().unit(Unit.VOLT)),
+		@SuppressWarnings("unchecked")
+		CHA_MAX_V(new Doc().unit(Unit.VOLT)
+				.onInit(channel -> { //
+					// on each setNextWrite to the channel -> store the value in the DEBUG-channel
+					((WriteChannel<Integer>) channel).onSetNextWrite(value -> {
+						channel.getComponent().channel(ChannelId.DEBUG_CHA_MAX_V).setNextValue(value);
+					});
+				})),
+		
+		DEBUG_DIS_MAX_A(new Doc().unit(Unit.AMPERE)),
+		@SuppressWarnings("unchecked")
+		DIS_MAX_A(new Doc().unit(Unit.AMPERE)
+		.onInit(channel -> { //
+			// on each setNextWrite to the channel -> store the value in the DEBUG-channel
+			((WriteChannel<Integer>) channel).onSetNextWrite(value -> {
+				channel.getComponent().channel(ChannelId.DEBUG_DIS_MAX_A).setNextValue(value);
+			});
+		})),
+		
+		DEBUG_CHA_MAX_A(new Doc().unit(Unit.AMPERE)),
+		@SuppressWarnings("unchecked")
+		CHA_MAX_A(new Doc().unit(Unit.AMPERE)
+				.onInit(channel -> { //
+					// on each setNextWrite to the channel -> store the value in the DEBUG-channel
+					((WriteChannel<Integer>) channel).onSetNextWrite(value -> {
+						channel.getComponent().channel(ChannelId.DEBUG_CHA_MAX_A).setNextValue(value);
+					});
+				})),
+		 
+		DEBUG_EN_LIMIT(new Doc()), 
+		@SuppressWarnings("unchecked")
 		EN_LIMIT(new Doc().text("new battery limits are activated when EnLimit is 1") //
 				.onInit(channel -> { //
 					// on each setNextWrite to the channel -> store the value in the DEBUG-channel
@@ -336,6 +378,26 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		});
 	}
 	
+	private void setBatteryRanges() {
+		if(battery == null) {
+			return;
+		}
+		int disMaxA = battery.getDischargeMaxCurrent().value().orElse(0);
+		int chaMaxA = battery.getChargeMaxCurrent().value().orElse(0);
+		int disMinV = battery.getDischargeMinVoltage().value().orElse(0);
+		int chaMaxV = battery.getChargeMaxVoltage().value().orElse(0);
+		try {
+			this.getChargeMaxAmpereChannel().setNextWriteValue(chaMaxA);
+			this.getDischargeMaxAmpereChannel().setNextValue(disMaxA);
+			this.getDischargeMinVoltageChannel().setNextValue(disMinV);
+			this.getChargeMaxVoltageChannel().setNextWriteValue(chaMaxV);
+		}
+		catch (OpenemsException e) {
+		log.error("Error during setBatteryRanges, " + e.getMessage());
+		}
+	}
+	
+	
 	public void Inverter_ON() {
 		IntegerWriteChannel SETDATA_ModOnCmd = this.channel(ChannelId.SETDATA_MOD_ON_CMD);
 //		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SETDATA_MOD_OFF_CMD);
@@ -430,7 +492,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private void LIMITS() { 
 		maxApparentPower = 30000;
 		doHandling_UPPER_LOWER_VOLTAGE();
-		doHandling_CHARGE_DISCHARGE_CURRENT();
+//		doHandling_CHARGE_DISCHARGE_CURRENT();
 
 	}
 
@@ -484,9 +546,11 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 						m(EssSinexcel.ChannelId.SET_CHARGE_DISCHARGE_REACTIVE, new SignedWordElement(0x0088))), // Target ACTIVE Power //Line65
 
 				new FC6WriteRegisterTask(0x032B,
-						m(EssSinexcel.ChannelId.SET_CHARGE_CURRENT, new UnsignedWordElement(0x032B))), // MAX_CHARGING_CURRENT //Line217
+						m(EssSinexcel.ChannelId.CHA_MAX_A, new UnsignedWordElement(0x032B),
+								ElementToChannelConverter.SCALE_FACTOR_1)), // 
 				new FC6WriteRegisterTask(0x032C,
-						m(EssSinexcel.ChannelId.SET_DISCHARGE_CURRENT, new UnsignedWordElement(0x032C))), // MAX_DISCHARGING_CURRENT //Line218
+						m(EssSinexcel.ChannelId.DIS_MAX_A, new UnsignedWordElement(0x032C),
+								ElementToChannelConverter.SCALE_FACTOR_1)), // 
 
 				new FC6WriteRegisterTask(0x0329,
 						m(EssSinexcel.ChannelId.SET_SLOW_CHARGE_VOLTAGE, new UnsignedWordElement(0x0329))), // Slow charge Voltage// Line215
@@ -494,9 +558,11 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 						m(EssSinexcel.ChannelId.SET_FLOAT_CHARGE_VOLTAGE, new UnsignedWordElement(0x0328))),
 
 				new FC6WriteRegisterTask(0x032E,
-						m(EssSinexcel.ChannelId.SET_UPPER_VOLTAGE, new UnsignedWordElement(0x032E))), // Upper voltage limit of battery protection //Line220
+						m(EssSinexcel.ChannelId.CHA_MAX_V, new UnsignedWordElement(0x032E),
+								ElementToChannelConverter.SCALE_FACTOR_1)), // Upper voltage limit of battery protection //Line220
 				new FC6WriteRegisterTask(0x032D,
-						m(EssSinexcel.ChannelId.SET_LOWER_VOLTAGE, new UnsignedWordElement(0x032D))), // LOWER voltage limit of battery protection //Line219
+						m(EssSinexcel.ChannelId.DIS_MIN_V, new UnsignedWordElement(0x032D),
+								ElementToChannelConverter.SCALE_FACTOR_1)), // LOWER voltage limit of battery protection //Line219
 				
 				new FC6WriteRegisterTask(0x007E,
 						m(EssSinexcel.ChannelId.SET_Analog_CHARGE_Energy, new UnsignedWordElement(0x007E))),
@@ -905,6 +971,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //		boolean island = Fault_Islanding();
 		switch (event.getTopic()) {
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
+			setBatteryRanges();
 			
 //			if (battery.getReadyForWorking().value().orElse(false) && a == true)
 //			{	
