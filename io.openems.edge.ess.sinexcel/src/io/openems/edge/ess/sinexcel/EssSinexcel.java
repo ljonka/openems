@@ -36,6 +36,7 @@ import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.StateChannel;
 import io.openems.edge.common.channel.WriteChannel;
+import io.openems.edge.common.channel.doc.ChannelId;
 import io.openems.edge.common.channel.doc.Doc;
 import io.openems.edge.common.channel.doc.Level;
 import io.openems.edge.common.channel.doc.Unit;
@@ -78,9 +79,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 			return;
 		}
 		
+		DCRelay();
 		doChannelMapping();
-		Inverter_ON();
-		LIMITS();
+	 	Inverter_ON();
 //		Reset_DC_AC_Energy();
 	}
 
@@ -376,9 +377,30 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 			this.getSoc().setNextValue(value.get());
 			this.channel(ChannelId.BAT_VOLTAGE).setNextValue(value.get());
 		});
+		
+//		this.battery.getDischargeMinVoltage().onChange(value -> {
+//			this.getSoc().setNextValue(value.get());
+//			this.channel(ChannelId.DIS_MIN_V).setNextValue(value.get());
+//		});
+//		
+//		this.battery.getChargeMaxVoltage().onChange(value -> {
+//			this.getSoc().setNextValue(value.get());
+//			this.channel(ChannelId.CHA_MAX_V).setNextValue(value.get());
+//		});
+//		
+//		this.battery.getDischargeMaxCurrent().onChange(value -> {
+//			this.getSoc().setNextValue(value.get());
+//			this.channel(ChannelId.DIS_MAX_A).setNextValue(value.get());
+//		});
+//		
+//		this.battery.getChargeMaxCurrent().onChange(value -> {
+//			this.getSoc().setNextValue(value.get());
+//			this.channel(ChannelId.CHA_MAX_A).setNextValue(value.get());
+//		});
 	}
 	
 	private void setBatteryRanges() {
+		maxApparentPower = 30000;
 		if(battery == null) {
 			return;
 		}
@@ -386,11 +408,16 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		int chaMaxA = battery.getChargeMaxCurrent().value().orElse(0);
 		int disMinV = battery.getDischargeMinVoltage().value().orElse(0);
 		int chaMaxV = battery.getChargeMaxVoltage().value().orElse(0);
+		
+		IntegerWriteChannel  SET_DIS_MIN_V = this.channel(ChannelId.DIS_MIN_V);
+		IntegerWriteChannel SET_CHA_MAX_V = this.channel(ChannelId.CHA_MAX_V);
+		IntegerWriteChannel SET_DIS_MAX_A = this.channel(ChannelId.DIS_MAX_A);
+		IntegerWriteChannel SET_CHA_MAX_A = this.channel(ChannelId.CHA_MAX_A);
 		try {
-			this.getChargeMaxAmpereChannel().setNextWriteValue(chaMaxA);
-			this.getDischargeMaxAmpereChannel().setNextValue(disMaxA);
-			this.getDischargeMinVoltageChannel().setNextValue(disMinV);
-			this.getChargeMaxVoltageChannel().setNextWriteValue(chaMaxV);
+			SET_CHA_MAX_A.setNextWriteValue(chaMaxA*10);
+			SET_DIS_MAX_A.setNextValue(disMaxA*10);
+			SET_DIS_MIN_V.setNextValue(disMinV*10);
+			SET_CHA_MAX_V.setNextWriteValue(chaMaxV*10);
 		}
 		catch (OpenemsException e) {
 		log.error("Error during setBatteryRanges, " + e.getMessage());
@@ -477,34 +504,11 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		}
 	}
 
-	public void doHandling_CHARGE_DISCHARGE_CURRENT() {
-		IntegerWriteChannel SET_DISCHARGE_CURRENT = this.channel(ChannelId.SET_DISCHARGE_CURRENT);
-		IntegerWriteChannel SET_CHARGE_CURRENT = this.channel(ChannelId.SET_CHARGE_CURRENT);
-		try {
-			SET_DISCHARGE_CURRENT.setNextWriteValue(DISCHARGE_CURRENT);
-			SET_CHARGE_CURRENT.setNextWriteValue(CHARGE_CURRENT);
-
-		} catch (OpenemsException e) {
-			log.error("problem occurred while trying to write the charge and discharge current value" + e.getMessage());
-		}
-	}
-
-	private void LIMITS() { 
-		maxApparentPower = 30000;
-		doHandling_UPPER_LOWER_VOLTAGE();
-//		doHandling_CHARGE_DISCHARGE_CURRENT();
-
-	}
-
-	public void doHandling_UPPER_LOWER_VOLTAGE() {
-		IntegerWriteChannel SET_LOWER_VOLTAGE = this.channel(ChannelId.SET_LOWER_VOLTAGE);
-		IntegerWriteChannel SET_UPPER_VOLTAGE = this.channel(ChannelId.SET_UPPER_VOLTAGE);
-		IntegerWriteChannel SET_SLOW_CHARGE_VOLTAGE = this.channel(ChannelId.SET_SLOW_CHARGE_VOLTAGE);
+	public void doHandling_SLOW_FLOAT_VOLTAGE() {
+				IntegerWriteChannel SET_SLOW_CHARGE_VOLTAGE = this.channel(ChannelId.SET_SLOW_CHARGE_VOLTAGE);
 		IntegerWriteChannel SET_FLOAT_CHARGE_VOLTAGE = this.channel(ChannelId.SET_FLOAT_CHARGE_VOLTAGE);
 		
 		try {
-			SET_UPPER_VOLTAGE.setNextWriteValue(UPPER_BAT_VOLTAGE);
-			SET_LOWER_VOLTAGE.setNextWriteValue(LOWER_BAT_VOLTAGE);
 			SET_SLOW_CHARGE_VOLTAGE.setNextWriteValue(SLOW_CHARGE_VOLTAGE);
 			SET_FLOAT_CHARGE_VOLTAGE.setNextWriteValue(FLOAT_CHARGE_VOLTAGE);
 
@@ -546,11 +550,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 						m(EssSinexcel.ChannelId.SET_CHARGE_DISCHARGE_REACTIVE, new SignedWordElement(0x0088))), // Target ACTIVE Power //Line65
 
 				new FC6WriteRegisterTask(0x032B,
-						m(EssSinexcel.ChannelId.CHA_MAX_A, new UnsignedWordElement(0x032B),
-								ElementToChannelConverter.SCALE_FACTOR_1)), // 
+						m(EssSinexcel.ChannelId.CHA_MAX_A, new UnsignedWordElement(0x032B))), // 
 				new FC6WriteRegisterTask(0x032C,
-						m(EssSinexcel.ChannelId.DIS_MAX_A, new UnsignedWordElement(0x032C),
-								ElementToChannelConverter.SCALE_FACTOR_1)), // 
+						m(EssSinexcel.ChannelId.DIS_MAX_A, new UnsignedWordElement(0x032C))), // 
 
 				new FC6WriteRegisterTask(0x0329,
 						m(EssSinexcel.ChannelId.SET_SLOW_CHARGE_VOLTAGE, new UnsignedWordElement(0x0329))), // Slow charge Voltage// Line215
@@ -558,11 +560,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 						m(EssSinexcel.ChannelId.SET_FLOAT_CHARGE_VOLTAGE, new UnsignedWordElement(0x0328))),
 
 				new FC6WriteRegisterTask(0x032E,
-						m(EssSinexcel.ChannelId.CHA_MAX_V, new UnsignedWordElement(0x032E),
-								ElementToChannelConverter.SCALE_FACTOR_1)), // Upper voltage limit of battery protection //Line220
+						m(EssSinexcel.ChannelId.CHA_MAX_V, new UnsignedWordElement(0x032E))), // Upper voltage limit of battery protection //Line220
 				new FC6WriteRegisterTask(0x032D,
-						m(EssSinexcel.ChannelId.DIS_MIN_V, new UnsignedWordElement(0x032D),
-								ElementToChannelConverter.SCALE_FACTOR_1)), // LOWER voltage limit of battery protection //Line219
+						m(EssSinexcel.ChannelId.DIS_MIN_V, new UnsignedWordElement(0x032D))), // LOWER voltage limit of battery protection //Line219
 				
 				new FC6WriteRegisterTask(0x007E,
 						m(EssSinexcel.ChannelId.SET_Analog_CHARGE_Energy, new UnsignedWordElement(0x007E))),
@@ -951,13 +951,13 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private static final int START = 1;
 	private static final int STOP = 1;
 	private static boolean a = true;
-	private static final int SLOW_CHARGE_VOLTAGE = 3900; // Slow and Float Charge Voltage must be the same for the Lithium Ionbattery.
-	private static final int FLOAT_CHARGE_VOLTAGE = 3900;
-	private static final int LOWER_BAT_VOLTAGE = 2950;	
-	private static final int UPPER_BAT_VOLTAGE = 4000;
+	private static final int SLOW_CHARGE_VOLTAGE = 4370; // Slow and Float Charge Voltage must be the same for the Lithium Ionbattery.
+	private static final int FLOAT_CHARGE_VOLTAGE = 4370;
+	private static final int LOWER_BAT_VOLTAGE = 3240;	
+	private static final int UPPER_BAT_VOLTAGE = 4380;
 
-	private static final int CHARGE_CURRENT = 900; // [CHARGE_CURRENT] = A // Range = 0 A ... 90 A
-	private static final int DISCHARGE_CURRENT = 900; // [DISCHARGE_CURRENT] = A // Range = 0 A ... 90 A
+	private static final int CHARGE_CURRENT = 700; // [CHARGE_CURRENT] = A // Range = 0 A ... 90 A
+	private static final int DISCHARGE_CURRENT = 700; // [DISCHARGE_CURRENT] = A // Range = 0 A ... 90 A
 //	private int ACTIVE = 0;							// [ACTIVE] = kW	// Range = -30 kW ... 30 kW	// ACTIVE < 0 -> CHARGE //	ACTIVE > 0 ->DISCHARGE 
 //	private int REACTIVE = 0;						// [REACTIVE] = kVAr	// Range = -30 kW ... 30 //REACTIVE < 0 -> inductive // REACTIVE > 0 -> capacitive
 	
@@ -972,6 +972,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		switch (event.getTopic()) {
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
 			setBatteryRanges();
+			doHandling_SLOW_FLOAT_VOLTAGE();
 			
 //			if (battery.getReadyForWorking().value().orElse(false) && a == true)
 //			{	
