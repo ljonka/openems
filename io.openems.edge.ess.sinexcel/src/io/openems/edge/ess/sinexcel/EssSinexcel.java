@@ -377,26 +377,6 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 			this.getSoc().setNextValue(value.get());
 			this.channel(ChannelId.BAT_VOLTAGE).setNextValue(value.get());
 		});
-		
-//		this.battery.getDischargeMinVoltage().onChange(value -> {
-//			this.getSoc().setNextValue(value.get());
-//			this.channel(ChannelId.DIS_MIN_V).setNextValue(value.get());
-//		});
-//		
-//		this.battery.getChargeMaxVoltage().onChange(value -> {
-//			this.getSoc().setNextValue(value.get());
-//			this.channel(ChannelId.CHA_MAX_V).setNextValue(value.get());
-//		});
-//		
-//		this.battery.getDischargeMaxCurrent().onChange(value -> {
-//			this.getSoc().setNextValue(value.get());
-//			this.channel(ChannelId.DIS_MAX_A).setNextValue(value.get());
-//		});
-//		
-//		this.battery.getChargeMaxCurrent().onChange(value -> {
-//			this.getSoc().setNextValue(value.get());
-//			this.channel(ChannelId.CHA_MAX_A).setNextValue(value.get());
-//		});
 	}
 	
 	private void setBatteryRanges() {
@@ -415,8 +395,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		IntegerWriteChannel SET_CHA_MAX_A = this.channel(ChannelId.CHA_MAX_A);
 		try {
 			SET_CHA_MAX_A.setNextWriteValue(chaMaxA*10);
-			SET_DIS_MAX_A.setNextValue(disMaxA*10);
-			SET_DIS_MIN_V.setNextValue(disMinV*10);
+			SET_DIS_MAX_A.setNextWriteValue(disMaxA*10);
+			SET_DIS_MIN_V.setNextWriteValue(disMinV*10);
 			SET_CHA_MAX_V.setNextWriteValue(chaMaxV*10);
 		}
 		catch (OpenemsException e) {
