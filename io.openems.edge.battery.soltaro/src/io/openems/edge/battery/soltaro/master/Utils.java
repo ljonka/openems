@@ -172,6 +172,10 @@ public class Utils {
 						
 					case MASTER_ALARM_PCS_COMMUNICATION_FAULT:
 					case MASTER_ALARM_PCS_OUT_OF_CONTROL:
+						
+					case SUB_MASTER_COMMUNICATION_FAULT_ALARM_MASTER_1:
+					case SUB_MASTER_COMMUNICATION_FAULT_ALARM_MASTER_2:
+					case SUB_MASTER_COMMUNICATION_FAULT_ALARM_MASTER_3:
 						return new StateChannel(m, channelId);
 					
 					case CHARGE_INDICATION:
@@ -1190,9 +1194,7 @@ public class Utils {
 					case RACK_3_SOC:
 					case RACK_3_SOH:
 					case RACK_3_VOLTAGE:
-					case SUB_MASTER_COMMUNICATION_FAULT_ALARM_MASTER_1:
-					case SUB_MASTER_COMMUNICATION_FAULT_ALARM_MASTER_2:
-					case SUB_MASTER_COMMUNICATION_FAULT_ALARM_MASTER_3:
+					
 					case SYSTEM_RUNNING_STATE:						
 					case VOLTAGE:
 					case STATE_MACHINE:						

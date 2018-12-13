@@ -4,13 +4,15 @@ import io.openems.edge.common.channel.doc.OptionsEnum;
 
 public enum State implements OptionsEnum {
 	
-	OFF("Off", 0),
-	INIT("Initializing", 0),
-	RUNNING("Running", 0),
-	STOPPING("Stopping", 0),
-	ERROR("Error", 0),
-	ERRORDELAY("Errordelay", 0),
-	UNDEFINED("Undefined", 0),;
+	UNDEFINED("Undefined", -1),
+	PENDING("Pending", 0),
+	OFF("Off", 1),
+	INIT("Initializing", 2),
+	RUNNING("Running", 3),
+	STOPPING("Stopping", 4),
+	ERROR("Error", 5),
+	ERRORDELAY("Errordelay", 6),
+	;
 
 	private State(String option, int value) {
 		this.option = option;
