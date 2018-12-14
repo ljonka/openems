@@ -26,8 +26,13 @@ public class Utils {
 					switch (channelId) {
 					case SOC:
 					case SOH:
-					case BATTERY_TEMP:
-					case MAX_CAPACITY:
+					case CURRENT:
+					case MAX_CELL_TEMPERATURE:
+					case MAX_CELL_VOLTAGE:
+					case MAX_POWER:
+					case MIN_CELL_TEMPERATURE:
+					case MIN_CELL_VOLTAGE:
+					case VOLTAGE:
 						return new IntegerReadChannel(m, channelId);
 					case CHARGE_MAX_CURRENT:
 						return new IntegerReadChannel(m, channelId, Master.CHARGE_MAX_A);
@@ -39,9 +44,8 @@ public class Utils {
 						return new IntegerReadChannel(m, channelId, Master.DISCHARGE_MIN_V);
 					case READY_FOR_WORKING:
 						return new BooleanReadChannel(m, channelId);
-					case CAPACITY_KWH:
+					case CAPACITY:
 						return new IntegerReadChannel(m, channelId, Master.CAPACITY_KWH);
-					default:
 						
 					}
 					return null;

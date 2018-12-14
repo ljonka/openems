@@ -95,7 +95,7 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 		switch (event.getTopic()) {
 
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-			handleBatteryState();
+			this.handleBatteryState();
 			break;
 		}
 	}
@@ -103,7 +103,7 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 	private void handleBatteryState() {
 		switch (this.batteryState) {
 		case DEFAULT:
-			doNormalHandling();
+			handleStateMachine();
 			break;
 		case OFF:
 			stopSystem();
@@ -114,12 +114,15 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 		}
 	}
 
+	// If an error has occurred, this indicates the time when next action could be done
 	private LocalDateTime errorDelayIsOver = null;
 	private int unsuccessfulStarts = 0;
+	// 
 	private LocalDateTime startAttemptTime = null;
 
-	private void doNormalHandling() {
-		System.err.println("doNormalHandling(): State: " + this.getStateMachineState());
+	private void handleStateMachine() {
+		log.info("Master.doNormalHandling(): State: " + this.getStateMachineState());
+		boolean readyForWorking = false;
 		switch (this.getStateMachineState()) {
 		case ERROR:
 			stopSystem();
@@ -129,16 +132,16 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 		case ERRORDELAY:
 			if (LocalDateTime.now().isAfter(errorDelayIsOver)) {
 				errorDelayIsOver = null;
-				if (isError()) {
-					setStateMachineState(State.ERROR);
+				if (this.isError()) {
+					this.setStateMachineState(State.ERROR);
 				} else {
-					setStateMachineState(State.OFF);
+					this.setStateMachineState(State.OFF);
 				}
 			}
 			break;
 		case INIT:
-			if (isSystemIsRunning()) {
-				setStateMachineState(State.RUNNING);
+			if (this.isSystemIsRunning()) {
+				this.setStateMachineState(State.RUNNING);
 				unsuccessfulStarts = 0;
 				startAttemptTime = null;
 			} else {
@@ -146,54 +149,52 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 					startAttemptTime = null;
 					unsuccessfulStarts++;
 					this.stopSystem();
-					setStateMachineState(State.STOPPING);
+					this.setStateMachineState(State.STOPPING);
 					if (unsuccessfulStarts >= config.maxStartAppempts()) {
 						errorDelayIsOver = LocalDateTime.now().plusSeconds(config.startUnsuccessfulDelay());
-						setStateMachineState(State.ERRORDELAY);
+						this.setStateMachineState(State.ERRORDELAY);
 						unsuccessfulStarts = 0;
 					}
 				}
 			}
-
 			break;
 		case OFF:
 			this.startSystem();
-			setStateMachineState(State.INIT);
+			this.setStateMachineState(State.INIT);
 			startAttemptTime = LocalDateTime.now();
 			break;
 		case RUNNING:
-			if (isError()) {
-				setStateMachineState(State.ERROR);
+			if (this.isError()) {
+				this.setStateMachineState(State.ERROR);
 			}
+			readyForWorking = true;
 			break;
 		case STOPPING:
-			if (isError()) {
-				setStateMachineState(State.ERROR);
+			if (this.isError()) {
+				this.setStateMachineState(State.ERROR);
 			} else {
-				if (isSystemStopped()) {
-					setStateMachineState(State.OFF);
+				if (this.isSystemStopped()) {
+					this.setStateMachineState(State.OFF);
 				}
 			}
 			break;
 		case UNDEFINED:
-			if (isError()) {
-				setStateMachineState(State.ERROR);
-			} else if (isSystemStopped()) {
-				setStateMachineState(State.OFF);
-			} else if (isSystemIsRunning()) {
-				setStateMachineState(State.RUNNING);
-			} else if (isSystemStatePending()) {
-				setStateMachineState(State.PENDING);
+			if (this.isError()) {
+				this.setStateMachineState(State.ERROR);
+			} else if (this.isSystemStopped()) {
+				this.setStateMachineState(State.OFF);
+			} else if (this.isSystemIsRunning()) {
+				this.setStateMachineState(State.RUNNING);
+			} else if (this.isSystemStatePending()) {
+				this.setStateMachineState(State.PENDING);
 			}
 			break;
 		case PENDING:
-			stopSystem();
-			setStateMachineState(State.OFF);
+			this.stopSystem();
+			this.setStateMachineState(State.OFF);
 			break;
-		default:
-			break;
-
 		}
+		this.getReadyForWorking().setNextValue(readyForWorking);
 	}
 
 	private boolean isError() {
@@ -324,6 +325,11 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 		return ret;
 	}
 
+	/**
+	 * Checks whether system has an undefined state, e.g. rack 1 & 2 are configured,
+	 * but only rack 1 is running. This state can only be reached at startup coming from 
+	 * state undefined
+	 */
 	private boolean isSystemStatePending() {
 		boolean ret = true;
 		if (ret && config.rack1IsUsed()) {
@@ -345,7 +351,6 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 		}
 
 		return ret && !isSystemIsRunning() && !isSystemStopped();
-
 	}
 
 	@Override
@@ -436,11 +441,18 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 				new FC3ReadRegistersTask(0x1044, Priority.LOW, //
 						m(MasterChannelId.CHARGE_INDICATION, new UnsignedWordElement(0x1044)), //
 						m(MasterChannelId.CURRENT, new UnsignedWordElement(0x1045), //
-								ElementToChannelConverter.SCALE_FACTOR_2), //
-						new DummyRegisterElement(0x1046), m(Battery.ChannelId.SOC, new UnsignedWordElement(0x1047)), //
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), //
+						new DummyRegisterElement(0x1046), //
+						m(Battery.ChannelId.SOC, new UnsignedWordElement(0x1047)), //
 						m(MasterChannelId.SYSTEM_RUNNING_STATE, new UnsignedWordElement(0x1048)), //
 						m(MasterChannelId.VOLTAGE, new UnsignedWordElement(0x1049), //
-								ElementToChannelConverter.SCALE_FACTOR_2) //
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1) //
+				), //
+				new FC3ReadRegistersTask(0x104D, Priority.HIGH, //
+						m(Battery.ChannelId.CHARGE_MAX_CURRENT, new UnsignedWordElement(0x104D),
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1), //
+						m(Battery.ChannelId.DISCHARGE_MAX_CURRENT, new UnsignedWordElement(0x104E),
+								ElementToChannelConverter.SCALE_FACTOR_MINUS_1) //
 				), //
 				new FC3ReadRegistersTask(0x1081, Priority.LOW, //
 						bm(new UnsignedWordElement(0x1081)) //
@@ -463,9 +475,9 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_1_STATE, new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x1)) //
 					), new FC3ReadRegistersTask(BASE_ADDRESS_RACK_1 + 0x100, Priority.LOW, //
 							m(MasterChannelId.RACK_1_VOLTAGE, new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x100), //
-									ElementToChannelConverter.SCALE_FACTOR_2), //
+									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), //
 							m(MasterChannelId.RACK_1_CURRENT, new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x101), //
-									ElementToChannelConverter.SCALE_FACTOR_2), //
+									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), //
 							m(MasterChannelId.RACK_1_CHARGE_INDICATION,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x102)), //
 							m(MasterChannelId.RACK_1_SOC, new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x103)), //
@@ -655,7 +667,10 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_1_BATTERY_059_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x83B)), //
 							m(MasterChannelId.RACK_1_BATTERY_060_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x83C)), //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x83C)) //
+					),
+
+					new FC3ReadRegistersTask(BASE_ADDRESS_RACK_1 + 0x83D, Priority.LOW, //
 							m(MasterChannelId.RACK_1_BATTERY_061_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x83D)), //
 							m(MasterChannelId.RACK_1_BATTERY_062_VOLTAGE,
@@ -775,7 +790,7 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_1_BATTERY_119_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x877)) //
 					), //
-					new FC3ReadRegistersTask(0x2878, Priority.LOW, //
+					new FC3ReadRegistersTask(BASE_ADDRESS_RACK_1 + 0x878, Priority.LOW, //
 							m(MasterChannelId.RACK_1_BATTERY_120_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x878)), //
 							m(MasterChannelId.RACK_1_BATTERY_121_VOLTAGE,
@@ -895,7 +910,9 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_1_BATTERY_178_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8B2)), //
 							m(MasterChannelId.RACK_1_BATTERY_179_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8B3)), //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8B3)) //
+					), 
+					new FC3ReadRegistersTask(BASE_ADDRESS_RACK_1 + 0x8B4, Priority.LOW, //
 							m(MasterChannelId.RACK_1_BATTERY_180_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8B4)), //
 							m(MasterChannelId.RACK_1_BATTERY_181_VOLTAGE,
@@ -943,32 +960,33 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_1_BATTERY_202_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8CA)), //
 							m(MasterChannelId.RACK_1_BATTERY_203_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8CB)), //
-							m(MasterChannelId.RACK_1_BATTERY_204_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8CC)), //
-							m(MasterChannelId.RACK_1_BATTERY_205_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8CD)), //
-							m(MasterChannelId.RACK_1_BATTERY_206_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8CE)), //
-							m(MasterChannelId.RACK_1_BATTERY_207_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8CF)), //
-							m(MasterChannelId.RACK_1_BATTERY_208_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D0)), //
-							m(MasterChannelId.RACK_1_BATTERY_209_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D1)), //
-							m(MasterChannelId.RACK_1_BATTERY_210_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D2)), //
-							m(MasterChannelId.RACK_1_BATTERY_211_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D3)), //
-							m(MasterChannelId.RACK_1_BATTERY_212_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D4)), //
-							m(MasterChannelId.RACK_1_BATTERY_213_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D5)), //
-							m(MasterChannelId.RACK_1_BATTERY_214_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D6)), //
-							m(MasterChannelId.RACK_1_BATTERY_215_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D7)) //
-					), new FC3ReadRegistersTask(BASE_ADDRESS_RACK_1 + 0xC00, Priority.LOW, //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8CB)) //
+//							m(MasterChannelId.RACK_1_BATTERY_204_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8CC)), //
+//							m(MasterChannelId.RACK_1_BATTERY_205_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8CD)), //
+//							m(MasterChannelId.RACK_1_BATTERY_206_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8CE)), //
+//							m(MasterChannelId.RACK_1_BATTERY_207_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8CF)), //
+//							m(MasterChannelId.RACK_1_BATTERY_208_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D0)), //
+//							m(MasterChannelId.RACK_1_BATTERY_209_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D1)), //
+//							m(MasterChannelId.RACK_1_BATTERY_210_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D2)), //
+//							m(MasterChannelId.RACK_1_BATTERY_211_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D3)), //
+//							m(MasterChannelId.RACK_1_BATTERY_212_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D4)), //
+//							m(MasterChannelId.RACK_1_BATTERY_213_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D5)), //
+//							m(MasterChannelId.RACK_1_BATTERY_214_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D6)), //
+//							m(MasterChannelId.RACK_1_BATTERY_215_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0x8D7)) //
+					),
+					new FC3ReadRegistersTask(BASE_ADDRESS_RACK_1 + 0xC00, Priority.LOW, //
 							m(MasterChannelId.RACK_1_BATTERY_000_TEMPERATURE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC00)), //
 							m(MasterChannelId.RACK_1_BATTERY_001_TEMPERATURE,
@@ -1088,7 +1106,9 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_1_BATTERY_058_TEMPERATURE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC3A)), //
 							m(MasterChannelId.RACK_1_BATTERY_059_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC3B)), //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC3B)) //
+					), 
+					new FC3ReadRegistersTask(BASE_ADDRESS_RACK_1 + 0xC3C, Priority.LOW, //
 							m(MasterChannelId.RACK_1_BATTERY_060_TEMPERATURE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC3C)), //
 							m(MasterChannelId.RACK_1_BATTERY_061_TEMPERATURE,
@@ -1104,87 +1124,87 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_1_BATTERY_066_TEMPERATURE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC42)), //
 							m(MasterChannelId.RACK_1_BATTERY_067_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC43)), //
-							m(MasterChannelId.RACK_1_BATTERY_068_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC44)), //
-							m(MasterChannelId.RACK_1_BATTERY_069_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC45)), //
-							m(MasterChannelId.RACK_1_BATTERY_070_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC46)), //
-							m(MasterChannelId.RACK_1_BATTERY_071_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC47)), //
-							m(MasterChannelId.RACK_1_BATTERY_072_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC48)), //
-							m(MasterChannelId.RACK_1_BATTERY_073_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC49)), //
-							m(MasterChannelId.RACK_1_BATTERY_074_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC4A)), //
-							m(MasterChannelId.RACK_1_BATTERY_075_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC4B)), //
-							m(MasterChannelId.RACK_1_BATTERY_076_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC4C)), //
-							m(MasterChannelId.RACK_1_BATTERY_077_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC4D)), //
-							m(MasterChannelId.RACK_1_BATTERY_078_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC4E)), //
-							m(MasterChannelId.RACK_1_BATTERY_079_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC4F)), //
-							m(MasterChannelId.RACK_1_BATTERY_080_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC50)), //
-							m(MasterChannelId.RACK_1_BATTERY_081_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC51)), //
-							m(MasterChannelId.RACK_1_BATTERY_082_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC52)), //
-							m(MasterChannelId.RACK_1_BATTERY_083_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC53)), //
-							m(MasterChannelId.RACK_1_BATTERY_084_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC54)), //
-							m(MasterChannelId.RACK_1_BATTERY_085_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC55)), //
-							m(MasterChannelId.RACK_1_BATTERY_086_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC56)), //
-							m(MasterChannelId.RACK_1_BATTERY_087_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC57)), //
-							m(MasterChannelId.RACK_1_BATTERY_088_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC58)), //
-							m(MasterChannelId.RACK_1_BATTERY_089_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC59)), //
-							m(MasterChannelId.RACK_1_BATTERY_090_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC5A)), //
-							m(MasterChannelId.RACK_1_BATTERY_091_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC5B)), //
-							m(MasterChannelId.RACK_1_BATTERY_092_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC5C)), //
-							m(MasterChannelId.RACK_1_BATTERY_093_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC5D)), //
-							m(MasterChannelId.RACK_1_BATTERY_094_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC5E)), //
-							m(MasterChannelId.RACK_1_BATTERY_095_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC5F)), //
-							m(MasterChannelId.RACK_1_BATTERY_096_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC60)), //
-							m(MasterChannelId.RACK_1_BATTERY_097_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC61)), //
-							m(MasterChannelId.RACK_1_BATTERY_098_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC62)), //
-							m(MasterChannelId.RACK_1_BATTERY_099_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC63)), //
-							m(MasterChannelId.RACK_1_BATTERY_100_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC64)), //
-							m(MasterChannelId.RACK_1_BATTERY_101_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC65)), //
-							m(MasterChannelId.RACK_1_BATTERY_102_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC66)), //
-							m(MasterChannelId.RACK_1_BATTERY_103_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC67)), //
-							m(MasterChannelId.RACK_1_BATTERY_104_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC68)), //
-							m(MasterChannelId.RACK_1_BATTERY_105_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC69)), //
-							m(MasterChannelId.RACK_1_BATTERY_106_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC6A)), //
-							m(MasterChannelId.RACK_1_BATTERY_107_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC6B)) //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC43)) //
+//							m(MasterChannelId.RACK_1_BATTERY_068_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC44)), //
+//							m(MasterChannelId.RACK_1_BATTERY_069_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC45)), //
+//							m(MasterChannelId.RACK_1_BATTERY_070_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC46)), //
+//							m(MasterChannelId.RACK_1_BATTERY_071_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC47)), //
+//							m(MasterChannelId.RACK_1_BATTERY_072_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC48)), //
+//							m(MasterChannelId.RACK_1_BATTERY_073_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC49)), //
+//							m(MasterChannelId.RACK_1_BATTERY_074_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC4A)), //
+//							m(MasterChannelId.RACK_1_BATTERY_075_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC4B)), //
+//							m(MasterChannelId.RACK_1_BATTERY_076_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC4C)), //
+//							m(MasterChannelId.RACK_1_BATTERY_077_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC4D)), //
+//							m(MasterChannelId.RACK_1_BATTERY_078_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC4E)), //
+//							m(MasterChannelId.RACK_1_BATTERY_079_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC4F)), //
+//							m(MasterChannelId.RACK_1_BATTERY_080_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC50)), //
+//							m(MasterChannelId.RACK_1_BATTERY_081_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC51)), //
+//							m(MasterChannelId.RACK_1_BATTERY_082_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC52)), //
+//							m(MasterChannelId.RACK_1_BATTERY_083_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC53)), //
+//							m(MasterChannelId.RACK_1_BATTERY_084_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC54)), //
+//							m(MasterChannelId.RACK_1_BATTERY_085_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC55)), //
+//							m(MasterChannelId.RACK_1_BATTERY_086_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC56)), //
+//							m(MasterChannelId.RACK_1_BATTERY_087_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC57)), //
+//							m(MasterChannelId.RACK_1_BATTERY_088_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC58)), //
+//							m(MasterChannelId.RACK_1_BATTERY_089_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC59)), //
+//							m(MasterChannelId.RACK_1_BATTERY_090_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC5A)), //
+//							m(MasterChannelId.RACK_1_BATTERY_091_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC5B)), //
+//							m(MasterChannelId.RACK_1_BATTERY_092_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC5C)), //
+//							m(MasterChannelId.RACK_1_BATTERY_093_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC5D)), //
+//							m(MasterChannelId.RACK_1_BATTERY_094_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC5E)), //
+//							m(MasterChannelId.RACK_1_BATTERY_095_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC5F)), //
+//							m(MasterChannelId.RACK_1_BATTERY_096_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC60)), //
+//							m(MasterChannelId.RACK_1_BATTERY_097_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC61)), //
+//							m(MasterChannelId.RACK_1_BATTERY_098_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC62)), //
+//							m(MasterChannelId.RACK_1_BATTERY_099_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC63)), //
+//							m(MasterChannelId.RACK_1_BATTERY_100_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC64)), //
+//							m(MasterChannelId.RACK_1_BATTERY_101_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC65)), //
+//							m(MasterChannelId.RACK_1_BATTERY_102_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC66)), //
+//							m(MasterChannelId.RACK_1_BATTERY_103_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC67)), //
+//							m(MasterChannelId.RACK_1_BATTERY_104_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC68)), //
+//							m(MasterChannelId.RACK_1_BATTERY_105_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC69)), //
+//							m(MasterChannelId.RACK_1_BATTERY_106_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC6A)), //
+//							m(MasterChannelId.RACK_1_BATTERY_107_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_1 + 0xC6B)) //
 					) //
 			}));
 
@@ -1197,9 +1217,9 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_2_STATE, new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x1)) //
 					), new FC3ReadRegistersTask(BASE_ADDRESS_RACK_2 + 0x100, Priority.LOW, //
 							m(MasterChannelId.RACK_2_VOLTAGE, new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x100), //
-									ElementToChannelConverter.SCALE_FACTOR_2), //
+									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), //
 							m(MasterChannelId.RACK_2_CURRENT, new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x101), //
-									ElementToChannelConverter.SCALE_FACTOR_2), //
+									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), //
 							m(MasterChannelId.RACK_2_CHARGE_INDICATION,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x102)), //
 							m(MasterChannelId.RACK_2_SOC, new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x103)), //
@@ -1387,7 +1407,8 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_2_BATTERY_058_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x83A)), //
 							m(MasterChannelId.RACK_2_BATTERY_059_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x83B)), //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x83B)) //
+					), new FC3ReadRegistersTask(BASE_ADDRESS_RACK_2 + 0x83C, Priority.LOW, //
 							m(MasterChannelId.RACK_2_BATTERY_060_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x83C)), //
 							m(MasterChannelId.RACK_2_BATTERY_061_VOLTAGE,
@@ -1509,7 +1530,7 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_2_BATTERY_119_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x877)) //
 					), //
-					new FC3ReadRegistersTask(0x2878, Priority.LOW, //
+					new FC3ReadRegistersTask(BASE_ADDRESS_RACK_2 + 0x878, Priority.LOW, //
 							m(MasterChannelId.RACK_2_BATTERY_120_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x878)), //
 							m(MasterChannelId.RACK_2_BATTERY_121_VOLTAGE,
@@ -1629,7 +1650,9 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_2_BATTERY_178_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8B2)), //
 							m(MasterChannelId.RACK_2_BATTERY_179_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8B3)), //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8B3)) //
+					),
+					new FC3ReadRegistersTask(BASE_ADDRESS_RACK_2 + 0x8B4, Priority.LOW, //
 							m(MasterChannelId.RACK_2_BATTERY_180_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8B4)), //
 							m(MasterChannelId.RACK_2_BATTERY_181_VOLTAGE,
@@ -1677,32 +1700,33 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_2_BATTERY_202_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8CA)), //
 							m(MasterChannelId.RACK_2_BATTERY_203_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8CB)), //
-							m(MasterChannelId.RACK_2_BATTERY_204_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8CC)), //
-							m(MasterChannelId.RACK_2_BATTERY_205_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8CD)), //
-							m(MasterChannelId.RACK_2_BATTERY_206_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8CE)), //
-							m(MasterChannelId.RACK_2_BATTERY_207_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8CF)), //
-							m(MasterChannelId.RACK_2_BATTERY_208_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D0)), //
-							m(MasterChannelId.RACK_2_BATTERY_209_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D1)), //
-							m(MasterChannelId.RACK_2_BATTERY_210_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D2)), //
-							m(MasterChannelId.RACK_2_BATTERY_211_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D3)), //
-							m(MasterChannelId.RACK_2_BATTERY_212_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D4)), //
-							m(MasterChannelId.RACK_2_BATTERY_213_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D5)), //
-							m(MasterChannelId.RACK_2_BATTERY_214_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D6)), //
-							m(MasterChannelId.RACK_2_BATTERY_215_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D7)) //
-					), new FC3ReadRegistersTask(BASE_ADDRESS_RACK_2 + 0xC00, Priority.LOW, //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8CB)) //
+//							m(MasterChannelId.RACK_2_BATTERY_204_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8CC)), //
+//							m(MasterChannelId.RACK_2_BATTERY_205_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8CD)), //
+//							m(MasterChannelId.RACK_2_BATTERY_206_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8CE)), //
+//							m(MasterChannelId.RACK_2_BATTERY_207_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8CF)), //
+//							m(MasterChannelId.RACK_2_BATTERY_208_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D0)), //
+//							m(MasterChannelId.RACK_2_BATTERY_209_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D1)), //
+//							m(MasterChannelId.RACK_2_BATTERY_210_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D2)), //
+//							m(MasterChannelId.RACK_2_BATTERY_211_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D3)), //
+//							m(MasterChannelId.RACK_2_BATTERY_212_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D4)), //
+//							m(MasterChannelId.RACK_2_BATTERY_213_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D5)), //
+//							m(MasterChannelId.RACK_2_BATTERY_214_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D6)), //
+//							m(MasterChannelId.RACK_2_BATTERY_215_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0x8D7)) //
+					), 
+					new FC3ReadRegistersTask(BASE_ADDRESS_RACK_2 + 0xC00, Priority.LOW, //
 							m(MasterChannelId.RACK_2_BATTERY_000_TEMPERATURE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC00)), //
 							m(MasterChannelId.RACK_2_BATTERY_001_TEMPERATURE,
@@ -1822,7 +1846,9 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_2_BATTERY_058_TEMPERATURE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC3A)), //
 							m(MasterChannelId.RACK_2_BATTERY_059_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC3B)), //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC3B)) //
+					), 
+					new FC3ReadRegistersTask(BASE_ADDRESS_RACK_2 + 0xC3C, Priority.LOW, //
 							m(MasterChannelId.RACK_2_BATTERY_060_TEMPERATURE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC3C)), //
 							m(MasterChannelId.RACK_2_BATTERY_061_TEMPERATURE,
@@ -1838,87 +1864,87 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_2_BATTERY_066_TEMPERATURE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC42)), //
 							m(MasterChannelId.RACK_2_BATTERY_067_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC43)), //
-							m(MasterChannelId.RACK_2_BATTERY_068_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC44)), //
-							m(MasterChannelId.RACK_2_BATTERY_069_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC45)), //
-							m(MasterChannelId.RACK_2_BATTERY_070_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC46)), //
-							m(MasterChannelId.RACK_2_BATTERY_071_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC47)), //
-							m(MasterChannelId.RACK_2_BATTERY_072_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC48)), //
-							m(MasterChannelId.RACK_2_BATTERY_073_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC49)), //
-							m(MasterChannelId.RACK_2_BATTERY_074_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC4A)), //
-							m(MasterChannelId.RACK_2_BATTERY_075_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC4B)), //
-							m(MasterChannelId.RACK_2_BATTERY_076_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC4C)), //
-							m(MasterChannelId.RACK_2_BATTERY_077_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC4D)), //
-							m(MasterChannelId.RACK_2_BATTERY_078_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC4E)), //
-							m(MasterChannelId.RACK_2_BATTERY_079_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC4F)), //
-							m(MasterChannelId.RACK_2_BATTERY_080_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC50)), //
-							m(MasterChannelId.RACK_2_BATTERY_081_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC51)), //
-							m(MasterChannelId.RACK_2_BATTERY_082_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC52)), //
-							m(MasterChannelId.RACK_2_BATTERY_083_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC53)), //
-							m(MasterChannelId.RACK_2_BATTERY_084_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC54)), //
-							m(MasterChannelId.RACK_2_BATTERY_085_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC55)), //
-							m(MasterChannelId.RACK_2_BATTERY_086_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC56)), //
-							m(MasterChannelId.RACK_2_BATTERY_087_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC57)), //
-							m(MasterChannelId.RACK_2_BATTERY_088_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC58)), //
-							m(MasterChannelId.RACK_2_BATTERY_089_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC59)), //
-							m(MasterChannelId.RACK_2_BATTERY_090_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC5A)), //
-							m(MasterChannelId.RACK_2_BATTERY_091_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC5B)), //
-							m(MasterChannelId.RACK_2_BATTERY_092_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC5C)), //
-							m(MasterChannelId.RACK_2_BATTERY_093_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC5D)), //
-							m(MasterChannelId.RACK_2_BATTERY_094_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC5E)), //
-							m(MasterChannelId.RACK_2_BATTERY_095_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC5F)), //
-							m(MasterChannelId.RACK_2_BATTERY_096_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC60)), //
-							m(MasterChannelId.RACK_2_BATTERY_097_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC61)), //
-							m(MasterChannelId.RACK_2_BATTERY_098_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC62)), //
-							m(MasterChannelId.RACK_2_BATTERY_099_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC63)), //
-							m(MasterChannelId.RACK_2_BATTERY_100_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC64)), //
-							m(MasterChannelId.RACK_2_BATTERY_101_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC65)), //
-							m(MasterChannelId.RACK_2_BATTERY_102_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC66)), //
-							m(MasterChannelId.RACK_2_BATTERY_103_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC67)), //
-							m(MasterChannelId.RACK_2_BATTERY_104_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC68)), //
-							m(MasterChannelId.RACK_2_BATTERY_105_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC69)), //
-							m(MasterChannelId.RACK_2_BATTERY_106_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC6A)), //
-							m(MasterChannelId.RACK_2_BATTERY_107_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC6B)) //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC43)) //
+//							m(MasterChannelId.RACK_2_BATTERY_068_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC44)), //
+//							m(MasterChannelId.RACK_2_BATTERY_069_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC45)), //
+//							m(MasterChannelId.RACK_2_BATTERY_070_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC46)), //
+//							m(MasterChannelId.RACK_2_BATTERY_071_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC47)), //
+//							m(MasterChannelId.RACK_2_BATTERY_072_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC48)), //
+//							m(MasterChannelId.RACK_2_BATTERY_073_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC49)), //
+//							m(MasterChannelId.RACK_2_BATTERY_074_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC4A)), //
+//							m(MasterChannelId.RACK_2_BATTERY_075_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC4B)), //
+//							m(MasterChannelId.RACK_2_BATTERY_076_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC4C)), //
+//							m(MasterChannelId.RACK_2_BATTERY_077_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC4D)), //
+//							m(MasterChannelId.RACK_2_BATTERY_078_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC4E)), //
+//							m(MasterChannelId.RACK_2_BATTERY_079_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC4F)), //
+//							m(MasterChannelId.RACK_2_BATTERY_080_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC50)), //
+//							m(MasterChannelId.RACK_2_BATTERY_081_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC51)), //
+//							m(MasterChannelId.RACK_2_BATTERY_082_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC52)), //
+//							m(MasterChannelId.RACK_2_BATTERY_083_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC53)), //
+//							m(MasterChannelId.RACK_2_BATTERY_084_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC54)), //
+//							m(MasterChannelId.RACK_2_BATTERY_085_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC55)), //
+//							m(MasterChannelId.RACK_2_BATTERY_086_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC56)), //
+//							m(MasterChannelId.RACK_2_BATTERY_087_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC57)), //
+//							m(MasterChannelId.RACK_2_BATTERY_088_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC58)), //
+//							m(MasterChannelId.RACK_2_BATTERY_089_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC59)), //
+//							m(MasterChannelId.RACK_2_BATTERY_090_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC5A)), //
+//							m(MasterChannelId.RACK_2_BATTERY_091_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC5B)), //
+//							m(MasterChannelId.RACK_2_BATTERY_092_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC5C)), //
+//							m(MasterChannelId.RACK_2_BATTERY_093_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC5D)), //
+//							m(MasterChannelId.RACK_2_BATTERY_094_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC5E)), //
+//							m(MasterChannelId.RACK_2_BATTERY_095_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC5F)), //
+//							m(MasterChannelId.RACK_2_BATTERY_096_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC60)), //
+//							m(MasterChannelId.RACK_2_BATTERY_097_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC61)), //
+//							m(MasterChannelId.RACK_2_BATTERY_098_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC62)), //
+//							m(MasterChannelId.RACK_2_BATTERY_099_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC63)), //
+//							m(MasterChannelId.RACK_2_BATTERY_100_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC64)), //
+//							m(MasterChannelId.RACK_2_BATTERY_101_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC65)), //
+//							m(MasterChannelId.RACK_2_BATTERY_102_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC66)), //
+//							m(MasterChannelId.RACK_2_BATTERY_103_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC67)), //
+//							m(MasterChannelId.RACK_2_BATTERY_104_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC68)), //
+//							m(MasterChannelId.RACK_2_BATTERY_105_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC69)), //
+//							m(MasterChannelId.RACK_2_BATTERY_106_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC6A)), //
+//							m(MasterChannelId.RACK_2_BATTERY_107_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_2 + 0xC6B)) //
 					) //
 			}));
 		}
@@ -1933,9 +1959,9 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_3_STATE, new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x1)) //
 					), new FC3ReadRegistersTask(BASE_ADDRESS_RACK_3 + 0x100, Priority.LOW, //
 							m(MasterChannelId.RACK_3_VOLTAGE, new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x100), //
-									ElementToChannelConverter.SCALE_FACTOR_2), //
+									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), //
 							m(MasterChannelId.RACK_3_CURRENT, new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x101), //
-									ElementToChannelConverter.SCALE_FACTOR_2), //
+									ElementToChannelConverter.SCALE_FACTOR_MINUS_1), //
 							m(MasterChannelId.RACK_3_CHARGE_INDICATION,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x102)), //
 							m(MasterChannelId.RACK_3_SOC, new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x103)), //
@@ -2123,7 +2149,8 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_3_BATTERY_058_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x83A)), //
 							m(MasterChannelId.RACK_3_BATTERY_059_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x83B)), //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x83B)) //
+					), new FC3ReadRegistersTask(BASE_ADDRESS_RACK_3 + 0x83C, Priority.LOW, //
 							m(MasterChannelId.RACK_3_BATTERY_060_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x83C)), //
 							m(MasterChannelId.RACK_3_BATTERY_061_VOLTAGE,
@@ -2245,7 +2272,7 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_3_BATTERY_119_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x877)) //
 					), //
-					new FC3ReadRegistersTask(0x2878, Priority.LOW, //
+					new FC3ReadRegistersTask(BASE_ADDRESS_RACK_3 + 0x878, Priority.LOW, //
 							m(MasterChannelId.RACK_3_BATTERY_120_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x878)), //
 							m(MasterChannelId.RACK_3_BATTERY_121_VOLTAGE,
@@ -2365,7 +2392,9 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_3_BATTERY_178_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8B2)), //
 							m(MasterChannelId.RACK_3_BATTERY_179_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8B3)), //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8B3)) //
+					), 
+					new FC3ReadRegistersTask(BASE_ADDRESS_RACK_3 + 0x8B4, Priority.LOW, //
 							m(MasterChannelId.RACK_3_BATTERY_180_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8B4)), //
 							m(MasterChannelId.RACK_3_BATTERY_181_VOLTAGE,
@@ -2413,32 +2442,33 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_3_BATTERY_202_VOLTAGE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8CA)), //
 							m(MasterChannelId.RACK_3_BATTERY_203_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8CB)), //
-							m(MasterChannelId.RACK_3_BATTERY_204_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8CC)), //
-							m(MasterChannelId.RACK_3_BATTERY_205_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8CD)), //
-							m(MasterChannelId.RACK_3_BATTERY_206_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8CE)), //
-							m(MasterChannelId.RACK_3_BATTERY_207_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8CF)), //
-							m(MasterChannelId.RACK_3_BATTERY_208_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D0)), //
-							m(MasterChannelId.RACK_3_BATTERY_209_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D1)), //
-							m(MasterChannelId.RACK_3_BATTERY_210_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D2)), //
-							m(MasterChannelId.RACK_3_BATTERY_211_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D3)), //
-							m(MasterChannelId.RACK_3_BATTERY_212_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D4)), //
-							m(MasterChannelId.RACK_3_BATTERY_213_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D5)), //
-							m(MasterChannelId.RACK_3_BATTERY_214_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D6)), //
-							m(MasterChannelId.RACK_3_BATTERY_215_VOLTAGE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D7)) //
-					), new FC3ReadRegistersTask(BASE_ADDRESS_RACK_3 + 0xC00, Priority.LOW, //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8CB)) //
+//							m(MasterChannelId.RACK_3_BATTERY_204_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8CC)), //
+//							m(MasterChannelId.RACK_3_BATTERY_205_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8CD)), //
+//							m(MasterChannelId.RACK_3_BATTERY_206_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8CE)), //
+//							m(MasterChannelId.RACK_3_BATTERY_207_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8CF)), //
+//							m(MasterChannelId.RACK_3_BATTERY_208_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D0)), //
+//							m(MasterChannelId.RACK_3_BATTERY_209_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D1)), //
+//							m(MasterChannelId.RACK_3_BATTERY_210_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D2)), //
+//							m(MasterChannelId.RACK_3_BATTERY_211_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D3)), //
+//							m(MasterChannelId.RACK_3_BATTERY_212_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D4)), //
+//							m(MasterChannelId.RACK_3_BATTERY_213_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D5)), //
+//							m(MasterChannelId.RACK_3_BATTERY_214_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D6)), //
+//							m(MasterChannelId.RACK_3_BATTERY_215_VOLTAGE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0x8D7)) //
+					), 
+					new FC3ReadRegistersTask(BASE_ADDRESS_RACK_3 + 0xC00, Priority.LOW, //
 							m(MasterChannelId.RACK_3_BATTERY_000_TEMPERATURE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC00)), //
 							m(MasterChannelId.RACK_3_BATTERY_001_TEMPERATURE,
@@ -2558,7 +2588,9 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_3_BATTERY_058_TEMPERATURE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC3A)), //
 							m(MasterChannelId.RACK_3_BATTERY_059_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC3B)), //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC3B)) //
+					), 
+					new FC3ReadRegistersTask(BASE_ADDRESS_RACK_3 + 0xC3C, Priority.LOW, //
 							m(MasterChannelId.RACK_3_BATTERY_060_TEMPERATURE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC3C)), //
 							m(MasterChannelId.RACK_3_BATTERY_061_TEMPERATURE,
@@ -2574,87 +2606,87 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 							m(MasterChannelId.RACK_3_BATTERY_066_TEMPERATURE,
 									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC42)), //
 							m(MasterChannelId.RACK_3_BATTERY_067_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC43)), //
-							m(MasterChannelId.RACK_3_BATTERY_068_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC44)), //
-							m(MasterChannelId.RACK_3_BATTERY_069_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC45)), //
-							m(MasterChannelId.RACK_3_BATTERY_070_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC46)), //
-							m(MasterChannelId.RACK_3_BATTERY_071_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC47)), //
-							m(MasterChannelId.RACK_3_BATTERY_072_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC48)), //
-							m(MasterChannelId.RACK_3_BATTERY_073_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC49)), //
-							m(MasterChannelId.RACK_3_BATTERY_074_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC4A)), //
-							m(MasterChannelId.RACK_3_BATTERY_075_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC4B)), //
-							m(MasterChannelId.RACK_3_BATTERY_076_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC4C)), //
-							m(MasterChannelId.RACK_3_BATTERY_077_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC4D)), //
-							m(MasterChannelId.RACK_3_BATTERY_078_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC4E)), //
-							m(MasterChannelId.RACK_3_BATTERY_079_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC4F)), //
-							m(MasterChannelId.RACK_3_BATTERY_080_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC50)), //
-							m(MasterChannelId.RACK_3_BATTERY_081_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC51)), //
-							m(MasterChannelId.RACK_3_BATTERY_082_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC52)), //
-							m(MasterChannelId.RACK_3_BATTERY_083_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC53)), //
-							m(MasterChannelId.RACK_3_BATTERY_084_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC54)), //
-							m(MasterChannelId.RACK_3_BATTERY_085_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC55)), //
-							m(MasterChannelId.RACK_3_BATTERY_086_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC56)), //
-							m(MasterChannelId.RACK_3_BATTERY_087_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC57)), //
-							m(MasterChannelId.RACK_3_BATTERY_088_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC58)), //
-							m(MasterChannelId.RACK_3_BATTERY_089_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC59)), //
-							m(MasterChannelId.RACK_3_BATTERY_090_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC5A)), //
-							m(MasterChannelId.RACK_3_BATTERY_091_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC5B)), //
-							m(MasterChannelId.RACK_3_BATTERY_092_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC5C)), //
-							m(MasterChannelId.RACK_3_BATTERY_093_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC5D)), //
-							m(MasterChannelId.RACK_3_BATTERY_094_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC5E)), //
-							m(MasterChannelId.RACK_3_BATTERY_095_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC5F)), //
-							m(MasterChannelId.RACK_3_BATTERY_096_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC60)), //
-							m(MasterChannelId.RACK_3_BATTERY_097_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC61)), //
-							m(MasterChannelId.RACK_3_BATTERY_098_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC62)), //
-							m(MasterChannelId.RACK_3_BATTERY_099_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC63)), //
-							m(MasterChannelId.RACK_3_BATTERY_100_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC64)), //
-							m(MasterChannelId.RACK_3_BATTERY_101_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC65)), //
-							m(MasterChannelId.RACK_3_BATTERY_102_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC66)), //
-							m(MasterChannelId.RACK_3_BATTERY_103_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC67)), //
-							m(MasterChannelId.RACK_3_BATTERY_104_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC68)), //
-							m(MasterChannelId.RACK_3_BATTERY_105_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC69)), //
-							m(MasterChannelId.RACK_3_BATTERY_106_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC6A)), //
-							m(MasterChannelId.RACK_3_BATTERY_107_TEMPERATURE,
-									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC6B)) //
+									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC43)) //
+//							m(MasterChannelId.RACK_3_BATTERY_068_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC44)), //
+//							m(MasterChannelId.RACK_3_BATTERY_069_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC45)), //
+//							m(MasterChannelId.RACK_3_BATTERY_070_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC46)), //
+//							m(MasterChannelId.RACK_3_BATTERY_071_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC47)), //
+//							m(MasterChannelId.RACK_3_BATTERY_072_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC48)), //
+//							m(MasterChannelId.RACK_3_BATTERY_073_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC49)), //
+//							m(MasterChannelId.RACK_3_BATTERY_074_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC4A)), //
+//							m(MasterChannelId.RACK_3_BATTERY_075_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC4B)), //
+//							m(MasterChannelId.RACK_3_BATTERY_076_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC4C)), //
+//							m(MasterChannelId.RACK_3_BATTERY_077_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC4D)), //
+//							m(MasterChannelId.RACK_3_BATTERY_078_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC4E)), //
+//							m(MasterChannelId.RACK_3_BATTERY_079_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC4F)), //
+//							m(MasterChannelId.RACK_3_BATTERY_080_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC50)), //
+//							m(MasterChannelId.RACK_3_BATTERY_081_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC51)), //
+//							m(MasterChannelId.RACK_3_BATTERY_082_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC52)), //
+//							m(MasterChannelId.RACK_3_BATTERY_083_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC53)), //
+//							m(MasterChannelId.RACK_3_BATTERY_084_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC54)), //
+//							m(MasterChannelId.RACK_3_BATTERY_085_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC55)), //
+//							m(MasterChannelId.RACK_3_BATTERY_086_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC56)), //
+//							m(MasterChannelId.RACK_3_BATTERY_087_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC57)), //
+//							m(MasterChannelId.RACK_3_BATTERY_088_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC58)), //
+//							m(MasterChannelId.RACK_3_BATTERY_089_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC59)), //
+//							m(MasterChannelId.RACK_3_BATTERY_090_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC5A)), //
+//							m(MasterChannelId.RACK_3_BATTERY_091_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC5B)), //
+//							m(MasterChannelId.RACK_3_BATTERY_092_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC5C)), //
+//							m(MasterChannelId.RACK_3_BATTERY_093_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC5D)), //
+//							m(MasterChannelId.RACK_3_BATTERY_094_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC5E)), //
+//							m(MasterChannelId.RACK_3_BATTERY_095_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC5F)), //
+//							m(MasterChannelId.RACK_3_BATTERY_096_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC60)), //
+//							m(MasterChannelId.RACK_3_BATTERY_097_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC61)), //
+//							m(MasterChannelId.RACK_3_BATTERY_098_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC62)), //
+//							m(MasterChannelId.RACK_3_BATTERY_099_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC63)), //
+//							m(MasterChannelId.RACK_3_BATTERY_100_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC64)), //
+//							m(MasterChannelId.RACK_3_BATTERY_101_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC65)), //
+//							m(MasterChannelId.RACK_3_BATTERY_102_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC66)), //
+//							m(MasterChannelId.RACK_3_BATTERY_103_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC67)), //
+//							m(MasterChannelId.RACK_3_BATTERY_104_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC68)), //
+//							m(MasterChannelId.RACK_3_BATTERY_105_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC69)), //
+//							m(MasterChannelId.RACK_3_BATTERY_106_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC6A)), //
+//							m(MasterChannelId.RACK_3_BATTERY_107_TEMPERATURE,
+//									new UnsignedWordElement(BASE_ADDRESS_RACK_3 + 0xC6B)) //
 					) //
 			}));
 		}

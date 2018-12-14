@@ -30,7 +30,9 @@ export class CurrentDataAndSummary_2018_7 extends CurrentDataAndSummary {
                 dischargeActivePowerACL2: null,
                 dischargeActivePowerACL3: null,
                 dischargeActivePowerDC: null,
-                maxDischargeActivePower: null
+                maxDischargeActivePower: null,
+                powerRatio: null,
+                maxApparent: null
             }, production: {
                 isAsymmetric: false,
                 hasDC: false,
@@ -47,13 +49,36 @@ export class CurrentDataAndSummary_2018_7 extends CurrentDataAndSummary {
                 buyActivePower: null,
                 maxBuyActivePower: null,
                 sellActivePower: null,
-                maxSellActivePower: null
+                maxSellActivePower: null,
+                gridMode: 1
             }, consumption: {
                 powerRatio: null,
                 activePower: null
+            }, evcs: {
+                actualPower: null
             }
         };
 
+        {
+            /*
+            * EVCS
+            * > 0 => Charge
+            * = 0 => No Charge
+            */
+            let actualPower = 0;
+            for (let thing of config.evcsDevices) {
+                if (thing in currentData) {
+                    let evcsData = currentData[thing];
+                    actualPower = this.getActualPower(evcsData);
+                    if ("ActualPower" in evcsData) {
+                        actualPower = Utils.addSafely(actualPower, evcsData.actualPower)
+                    }
+                }
+            }
+            if (actualPower) {
+                result.evcs.actualPower = actualPower;
+            }
+        }
         {
             /*
              * Storage
@@ -68,6 +93,8 @@ export class CurrentDataAndSummary_2018_7 extends CurrentDataAndSummary {
             let activePowerACL3 = null;
             let activePowerDC = null;
             let countSoc = 0;
+            let chargePower = config.chargepower
+
             for (let thing of config.esss) {
                 if (thing in currentData) {
                     let essData = currentData[thing];
@@ -165,9 +192,12 @@ export class CurrentDataAndSummary_2018_7 extends CurrentDataAndSummary {
                 if (activePower > 0) {
                     result.storage.chargeActivePower = activePower;
                     result.storage.dischargeActivePower = 0;
+
+                    result.storage.powerRatio = Math.round(result.storage.chargeActivePower / chargePower * 100);
                 } else {
                     result.storage.chargeActivePower = 0;
                     result.storage.dischargeActivePower = activePower * -1;
+                    result.storage.powerRatio = Math.round(result.storage.dischargeActivePower / chargePower * -100);
                 }
             }
         }
@@ -182,6 +212,7 @@ export class CurrentDataAndSummary_2018_7 extends CurrentDataAndSummary {
             let ratio = 0;
             let maxSell = 0;
             let maxBuy = 0;
+
             for (let thing of config.gridMeters) {
                 let meterData = currentData[thing];
                 let meterConfig = config.things[thing];
@@ -308,6 +339,15 @@ export class CurrentDataAndSummary_2018_7 extends CurrentDataAndSummary {
         } else if ("ActivePower" in o && o.ActivePower != null) {
             return o.ActivePower;
         } else {
+            return null;
+        }
+    }
+
+    private getActualPower(o: any): number {
+        if ("ActualPower" in o && o.ActualPower != null) {
+            return o.ActualPower
+        }
+        else {
             return null;
         }
     }
