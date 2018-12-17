@@ -36,7 +36,6 @@ import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.StateChannel;
 import io.openems.edge.common.channel.WriteChannel;
-import io.openems.edge.common.channel.doc.ChannelId;
 import io.openems.edge.common.channel.doc.Doc;
 import io.openems.edge.common.channel.doc.Level;
 import io.openems.edge.common.channel.doc.Unit;
@@ -75,6 +74,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	void activate(ComponentContext context, Config config) {
 		super.activate(context, config.service_pid(), config.id(), config.enabled(), DEFAULT_UNIT_ID, this.cm, "Modbus",
 				config.modbus_id());
+		this.InverterState = config.InverterState();
 		if (OpenemsComponent.updateReferenceFilter(this.cm, config.service_pid(), "battery", config.battery_id())) {
 			return;
 		}
@@ -359,22 +359,22 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		});
 
 		this.battery.getSoh().onChange(value -> {
-			this.getSoc().setNextValue(value.get());
+//			this.getSoc().setNextValue(value.get());
 			this.channel(ChannelId.BAT_SOH).setNextValue(value.get());
 		});
 
 		this.battery.getBatteryTemp().onChange(value -> {
-			this.getSoc().setNextValue(value.get());
+//			this.getSoc().setNextValue(value.get());
 			this.channel(ChannelId.BAT_TEMP).setNextValue(value.get());
 		});
 
 		this.battery.getMinimalCellVoltage().onChange(value -> {
-			this.getSoc().setNextValue(value.get());
+//			this.getSoc().setNextValue(value.get());
 			this.channel(ChannelId.BAT_MIN_CELL_VOLTAGE).setNextValue(value.get());
 		});
 
 		this.battery.getVoltage().onChange(value -> {
-			this.getSoc().setNextValue(value.get());
+//			this.getSoc().setNextValue(value.get());
 			this.channel(ChannelId.BAT_VOLTAGE).setNextValue(value.get());
 		});
 	}
@@ -920,7 +920,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	 */
 
 	public int maxApparentPower;
-
+	private InverterState InverterState;
 	private Battery battery;
 	public LocalDateTime timeForSystemInitialization = null;
 
@@ -930,14 +930,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private static final int ENABLED_ANTI_ISLANDING = 1;
 	private static final int START = 1;
 	private static final int STOP = 1;
-	private static boolean a = true;
 	private static final int SLOW_CHARGE_VOLTAGE = 4370; // Slow and Float Charge Voltage must be the same for the Lithium Ionbattery.
 	private static final int FLOAT_CHARGE_VOLTAGE = 4370;
-	private static final int LOWER_BAT_VOLTAGE = 3240;	
-	private static final int UPPER_BAT_VOLTAGE = 4380;
 
-	private static final int CHARGE_CURRENT = 700; // [CHARGE_CURRENT] = A // Range = 0 A ... 90 A
-	private static final int DISCHARGE_CURRENT = 700; // [DISCHARGE_CURRENT] = A // Range = 0 A ... 90 A
 //	private int ACTIVE = 0;							// [ACTIVE] = kW	// Range = -30 kW ... 30 kW	// ACTIVE < 0 -> CHARGE //	ACTIVE > 0 ->DISCHARGE 
 //	private int REACTIVE = 0;						// [REACTIVE] = kVAr	// Range = -30 kW ... 30 //REACTIVE < 0 -> inductive // REACTIVE > 0 -> capacitive
 	
@@ -953,6 +948,15 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
 			setBatteryRanges();
 			doHandling_SLOW_FLOAT_VOLTAGE();
+			
+			switch (this.InverterState) {
+			case ON:
+				Inverter_ON();
+				break;
+			case OFF:
+				Inverter_OFF();
+				break;
+			}
 			
 //			if (battery.getReadyForWorking().value().orElse(false) && a == true)
 //			{	
