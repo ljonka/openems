@@ -413,8 +413,9 @@ public class Master extends AbstractOpenemsModbusComponent implements Battery, O
 		return state;
 	}
 
-	public void setStateMachineState(State state) {
+	public void setStateMachineState(State state) {		
 		this.state = state;
+		this.channel(MasterChannelId.STATE_MACHINE).setNextValue(this.state);		
 	}
 
 	private static final int BASE_ADDRESS_RACK_1 = 0x2000;
