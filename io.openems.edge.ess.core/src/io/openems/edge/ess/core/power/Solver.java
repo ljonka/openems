@@ -499,6 +499,12 @@ public class Solver {
 			maxLastActivePower = Math.max(Math.abs(inv.getLastActivePower()), maxLastActivePower);
 			sumWeights += Math.abs(inv.getWeight());
 		}
+		
+		// TODO 
+		// Error appears when only one inverter with SoC 0% exists
+//		if (sumWeights == 0) {
+//			sumWeights = 1;
+//		}
 
 		// create map with normalized last weights
 		Map<Inverter, Double> lastWeights = new HashMap<>();
