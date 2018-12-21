@@ -34,6 +34,7 @@ public class Utils {
 					case MAX_CELL_VOLTAGE:
 					case MIN_CELL_TEMPERATURE:
 					case MIN_CELL_VOLTAGE:
+					case MAX_POWER:			
 						return new IntegerReadChannel(s, channelId);
 					case CHARGE_MAX_CURRENT:
 						return new IntegerReadChannel(s, channelId, SoltaroRack.CHARGE_MAX_A);
@@ -45,8 +46,8 @@ public class Utils {
 						return new IntegerReadChannel(s, channelId, SoltaroRack.DISCHARGE_MIN_V);
 					case READY_FOR_WORKING:
 						return new BooleanReadChannel(s, channelId);
-					case MAX_POWER:
-						return new IntegerReadChannel(s, channelId, SoltaroRack.MAX_POWER_WATT);
+					default:
+						break;
 					}
 					return null;
 				}), Arrays.stream(SoltaroRack.ChannelId.values()).map(channelId -> {
@@ -405,5 +406,5 @@ public class Utils {
 					return null;
 				}) //
 		).flatMap(channel -> channel);
-	}		
+	}
 }

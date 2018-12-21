@@ -1,5 +1,6 @@
 package io.openems.edge.battery.soltaro.versionb;
 
+import io.openems.edge.battery.soltaro.master.State;
 import io.openems.edge.battery.soltaro.versionb.VersionBEnums.AutoSetFunction;
 import io.openems.edge.battery.soltaro.versionb.VersionBEnums.ChargeIndication;
 import io.openems.edge.battery.soltaro.versionb.VersionBEnums.ClusterRunState;
@@ -16,6 +17,7 @@ import io.openems.edge.common.channel.doc.Level;
 import io.openems.edge.common.channel.doc.Unit;
 
 public enum VersionBChannelId implements io.openems.edge.common.channel.doc.ChannelId {
+	STATE_MACHINE(new Doc().level(Level.INFO).text("Current State of State-Machine").options(State.values())), //
 	FAN_STATUS(new Doc().options(FanStatus.values())), //
 	MAIN_CONTACTOR_STATE(new Doc().options(ContactorState.values())), //
 	DRY_CONTACT_1_EXPORT(new Doc().options(ContactExport.values())), //

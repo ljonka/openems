@@ -29,10 +29,15 @@ public class Utils {
 					switch (channelId) {
 					case SOC:
 					case SOH:
-					case BATTERY_TEMP:
-					case MAX_CAPACITY:
-					case MINIMAL_CELL_VOLTAGE:
+//					case BATTERY_TEMP:
+//					case MAX_CAPACITY:
+					case MIN_CELL_VOLTAGE:
 					case VOLTAGE:
+					case CURRENT:
+					case MAX_CELL_TEMPERATURE:
+					case MAX_CELL_VOLTAGE:
+					case MAX_POWER:
+					case MIN_CELL_TEMPERATURE:
 						return new IntegerReadChannel(s, channelId);
 					case CHARGE_MAX_CURRENT:
 						return new IntegerReadChannel(s, channelId, SoltaroRackVersionB.CHARGE_MAX_A);
@@ -44,10 +49,8 @@ public class Utils {
 						return new IntegerReadChannel(s, channelId, SoltaroRackVersionB.DISCHARGE_MIN_V);
 					case READY_FOR_WORKING:
 						return new BooleanReadChannel(s, channelId);
-					case CAPACITY_KWH:
+					case CAPACITY:
 						return new IntegerReadChannel(s, channelId, SoltaroRackVersionB.CAPACITY_KWH);
-					default:
-						break;
 					}
 					return null;
 				}), Arrays.stream(VersionBChannelId.values()).map(channelId -> {
@@ -868,9 +871,11 @@ public class Utils {
 										case PROTECT_FLAG_REGISTER_2:
 										case WORK_PARAMETER_SYSTEM_RTC_TIME_HIGH_BITS:
 										case WORK_PARAMETER_SYSTEM_RTC_TIME_LOW_BITS:
-										
+										case STATE_MACHINE:
 											return new IntegerReadChannel(s, channelId);
 						// ===========================================
+				
+			
 						
 						
 					}

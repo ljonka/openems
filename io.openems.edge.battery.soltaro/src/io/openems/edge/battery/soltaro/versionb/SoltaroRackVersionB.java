@@ -22,7 +22,8 @@ import org.slf4j.LoggerFactory;
 
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.battery.api.Battery;
-import io.openems.edge.battery.soltaro.versionb.VersionBEnums.*;
+import io.openems.edge.battery.soltaro.BatteryState;
+import io.openems.edge.battery.soltaro.versionb.VersionBEnums.ContactorControl;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
 import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
@@ -32,14 +33,12 @@ import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
-import io.openems.edge.common.channel.BooleanReadChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
+import io.openems.edge.common.channel.StateChannel;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.taskmanager.Priority;
-import io.openems.edge.battery.soltaro.BatteryState;
-import io.openems.edge.battery.soltaro.versionb.VersionBChannelId;
 
 @Designate(ocd = Config.class, factory = true)
 @Component( //
@@ -54,31 +53,32 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 	// Default values for the battery ranges
 	public static final int DISCHARGE_MIN_V = 696;
 	public static final int CHARGE_MAX_V = 854;
-	public static final int DISCHARGE_MAX_A = 20;
+	public static final int DISCHARGE_MAX_A = 20; // TODO for safety set it to 0?
 	public static final int CHARGE_MAX_A = 20;
 
 	protected final static int SYSTEM_ON = 1;
 	protected final static int SYSTEM_OFF = 0;
 
-	private static final int SECURITY_INTERVAL_FOR_COMMANDS_IN_SECONDS = 3;
-	private static final int MAX_TIME_FOR_INITIALIZATION_IN_SECONDS = 30;
-	
+//	private static final int SECURITY_INTERVAL_FOR_COMMANDS_IN_SECONDS = 3;
+//	private static final int MAX_TIME_FOR_INITIALIZATION_IN_SECONDS = 30;
+
 	public static final Integer CAPACITY_KWH = 50;
 
 	private final Logger log = LoggerFactory.getLogger(SoltaroRackVersionB.class);
 
 	private String modbusBridgeId;
 	private BatteryState batteryState;
-	private int secondsToWaitAlarmLevel2 = 600;
+	private State state = State.UNDEFINED;
+//	private int secondsToWaitAlarmLevel2 = 600;
 
 	@Reference
 	protected ConfigurationAdmin cm;
 
-	private LocalDateTime lastCommandSent = LocalDateTime.now(); // timer variable to avoid that commands are sent to
-																	// fast
-	private LocalDateTime timeForSystemInitialization = null;
-	private boolean isStopping = false; // indicates that system is stopping; during that time no commands should be
-										// sent
+//	private LocalDateTime lastCommandSent = LocalDateTime.now(); // timer variable to avoid that commands are sent to
+	// fast
+//	private LocalDateTime timeForSystemInitialization = null;
+//	private boolean isStopping = false; // indicates that system is stopping; during that time no commands should be sent
+	private Config config;
 
 	public SoltaroRackVersionB() {
 		Utils.initializeChannels(this).forEach(channel -> this.addChannel(channel));
@@ -91,12 +91,12 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 
 	@Activate
 	void activate(ComponentContext context, Config config) {
+		this.config = config;
 		super.activate(context, config.service_pid(), config.id(), config.enabled(), config.modbusUnitId(), this.cm,
 				"Modbus", config.modbus_id());
 		this.modbusBridgeId = config.modbus_id();
 
 		this.batteryState = config.batteryState();
-		this.secondsToWaitAlarmLevel2 = config.secondsToWaitAlarmLevel2();
 		initializeCallbacks();
 	}
 
@@ -106,32 +106,6 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 	}
 
 	private <T> void initializeCallbacks() {
-		this.channel(VersionBChannelId.BMS_CONTACTOR_CONTROL).onChange(value -> {
-			Optional<Enum<?>> ccOpt = value.asEnumOptional();
-			if (!ccOpt.isPresent()) {
-				return;
-			}
-
-			ContactorControl cc = (ContactorControl) ccOpt.get();
-
-			switch (cc) {
-			case CONNECTION_INITIATING:
-				timeForSystemInitialization = LocalDateTime.now();
-				this.channel(Battery.ChannelId.READY_FOR_WORKING).setNextValue(false);
-				break;
-			case CUT_OFF:
-				timeForSystemInitialization = null;
-				this.channel(Battery.ChannelId.READY_FOR_WORKING).setNextValue(false);
-				isStopping = false;
-				break;
-			case ON_GRID:
-				timeForSystemInitialization = null;
-				this.channel(Battery.ChannelId.READY_FOR_WORKING).setNextValue(true);
-				break;
-			default:
-				break;
-			}
-		});
 
 		this.channel(VersionBChannelId.CLUSTER_1_VOLTAGE).onChange(value -> {
 			@SuppressWarnings("unchecked")
@@ -150,7 +124,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 				return;
 			}
 			int voltage_millivolt = vOpt.get();
-			this.channel(Battery.ChannelId.MINIMAL_CELL_VOLTAGE).setNextValue(voltage_millivolt);
+			this.channel(Battery.ChannelId.MIN_CELL_VOLTAGE).setNextValue(voltage_millivolt);
 		});
 
 		// Battery ranges
@@ -200,7 +174,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 			int max_current = (int) (cOpt.get() * 0.001);
 			this.channel(Battery.ChannelId.DISCHARGE_MAX_CURRENT).setNextValue(max_current);
 		});
-		
+
 	}
 
 	@Override
@@ -217,22 +191,9 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 	}
 
 	private void handleBatteryState() {
-		// Avoid that commands are written to fast to the battery rack
-		if (lastCommandSent.plusSeconds(SECURITY_INTERVAL_FOR_COMMANDS_IN_SECONDS).isAfter(LocalDateTime.now())) {
-			return;
-		} else {
-			lastCommandSent = LocalDateTime.now();
-		}
-
-		// If alarm 2 exists, just stop system to save the rack
-		if (isAlarmLevel2()) {
-			stopSystem();
-			return;
-		}
-
 		switch (this.batteryState) {
 		case DEFAULT:
-			checkSystemState();
+			handleStateMachine();
 			break;
 		case OFF:
 			stopSystem();
@@ -243,65 +204,130 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 		}
 	}
 
-	private boolean isAlarmLevel2() {
-		return (
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_HIGH) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_HIGH) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CHA_CURRENT_HIGH) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_LOW) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_LOW) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_DISCHA_CURRENT_HIGH) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_CHA_TEMP_HIGH) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_CHA_TEMP_LOW) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_SOC_LOW) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TEMPERATURE_DIFFERENCE_HIGH) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_POLES_TEMPERATURE_DIFFERENCE_HIGH) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_DIFFERENCE_HIGH) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_INSULATION_LOW) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_DIFFERENCE_HIGH) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_DISCHA_TEMP_HIGH) ||
-				readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_DISCHA_TEMP_LOW) 
-		);
+	// If an error has occurred, this indicates the time when next action could be
+	// done
+	private LocalDateTime errorDelayIsOver = null;
+	private int unsuccessfulStarts = 0;
+	//
+	private LocalDateTime startAttemptTime = null;
+
+	private void handleStateMachine() {
+		log.info("SoltaroRackVersionB.doNormalHandling(): State: " + this.getStateMachineState());
+		boolean readyForWorking = false;
+		switch (this.getStateMachineState()) {
+		case ERROR:
+			stopSystem();
+			errorDelayIsOver = LocalDateTime.now().plusSeconds(config.errorLevel2Delay());
+			setStateMachineState(State.ERRORDELAY);
+			break;
+		case ERRORDELAY:
+			if (LocalDateTime.now().isAfter(errorDelayIsOver)) {
+				errorDelayIsOver = null;
+				if (this.isError()) {
+					this.setStateMachineState(State.ERROR);
+				} else {
+					this.setStateMachineState(State.OFF);
+				}
+			}
+			break;
+		case INIT:
+			if (this.isSystemIsRunning()) {
+				this.setStateMachineState(State.RUNNING);
+				unsuccessfulStarts = 0;
+				startAttemptTime = null;
+			} else {
+				if (startAttemptTime.plusSeconds(config.maxStartTime()).isBefore(LocalDateTime.now())) {
+					startAttemptTime = null;
+					unsuccessfulStarts++;
+					this.stopSystem();
+					this.setStateMachineState(State.STOPPING);
+					if (unsuccessfulStarts >= config.maxStartAppempts()) {
+						errorDelayIsOver = LocalDateTime.now().plusSeconds(config.startUnsuccessfulDelay());
+						this.setStateMachineState(State.ERRORDELAY);
+						unsuccessfulStarts = 0;
+					}
+				}
+			}
+			break;
+		case OFF:
+			this.startSystem();
+			this.setStateMachineState(State.INIT);
+			startAttemptTime = LocalDateTime.now();
+			break;
+		case RUNNING:
+			if (this.isError()) {
+				this.setStateMachineState(State.ERROR);
+			} else {
+				readyForWorking = true;
+			}
+			break;
+		case STOPPING:
+			if (this.isError()) {
+				this.setStateMachineState(State.ERROR);
+			} else {
+				if (this.isSystemStopped()) {
+					this.setStateMachineState(State.OFF);
+				}
+			}
+			break;
+		case UNDEFINED:
+			if (this.isError()) {
+				this.setStateMachineState(State.ERROR);
+			} else if (this.isSystemStopped()) {
+				this.setStateMachineState(State.OFF);
+			} else if (this.isSystemIsRunning()) {
+				this.setStateMachineState(State.RUNNING);
+			} else if (this.isSystemStatePending()) {
+				this.setStateMachineState(State.PENDING);
+			}
+			break;
+		case PENDING:
+			this.stopSystem();
+			this.setStateMachineState(State.OFF);
+			break;
+		}
+		this.getReadyForWorking().setNextValue(readyForWorking);
 	}
-	
-	
+
+	private boolean isSystemStatePending() { // System is pending if it is definitely not started and not stopped
+		return !isSystemIsRunning() && !isSystemStopped();
+	}
+
+	private boolean isSystemIsRunning() {
+		IntegerReadChannel contactorControlChannel = this.channel(VersionBChannelId.BMS_CONTACTOR_CONTROL);
+		Optional<Enum<?>> ccOpt = contactorControlChannel.value().asEnumOptional();
+		return ccOpt.isPresent() && ccOpt.get() == ContactorControl.ON_GRID;
+	}
+
+	private boolean isSystemStopped() {
+		IntegerReadChannel contactorControlChannel = this.channel(VersionBChannelId.BMS_CONTACTOR_CONTROL);
+		Optional<Enum<?>> ccOpt = contactorControlChannel.value().asEnumOptional();
+		return ccOpt.isPresent() && ccOpt.get() == ContactorControl.CUT_OFF;
+	}
+
+	private boolean isError() {
+		return (readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_HIGH)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_HIGH)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CHA_CURRENT_HIGH)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_LOW)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_LOW)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_DISCHA_CURRENT_HIGH)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_CHA_TEMP_HIGH)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_CHA_TEMP_LOW)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_SOC_LOW)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TEMPERATURE_DIFFERENCE_HIGH)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_POLES_TEMPERATURE_DIFFERENCE_HIGH)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_DIFFERENCE_HIGH)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_INSULATION_LOW)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_DIFFERENCE_HIGH)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_DISCHA_TEMP_HIGH)
+				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_DISCHA_TEMP_LOW));
+	}
+
 	private boolean readValueFromChannel(VersionBChannelId channelId) {
-		BooleanReadChannel r = this.channel(channelId);
+		StateChannel r = this.channel(channelId);
 		Optional<Boolean> bOpt = r.value().asOptional();
 		return bOpt.isPresent() && bOpt.get();
-	}
-
-	private void checkSystemState() {
-
-		IntegerReadChannel contactorControlChannel = this.channel(VersionBChannelId.BMS_CONTACTOR_CONTROL);
-
-		Optional<Enum<?>> ccOpt = contactorControlChannel.value().asEnumOptional();
-		if (!ccOpt.isPresent()) {
-			return;
-		}
-		ContactorControl cc = (ContactorControl) ccOpt.get();
-
-		if (cc == ContactorControl.CONNECTION_INITIATING) {
-			if (timeForSystemInitialization == null || timeForSystemInitialization
-					.plusSeconds(MAX_TIME_FOR_INITIALIZATION_IN_SECONDS).isAfter(LocalDateTime.now())) {
-				return;
-			} else {
-				// Maybe battery hung up in precharge mode...stop system, it will be restarted
-				// automatically
-				this.channel(VersionBChannelId.PRECHARGE_TAKING_TOO_LONG).setNextValue(true);
-				stopSystem();
-				return;
-			}
-		}
-		if (cc == ContactorControl.CUT_OFF) {
-			startSystem();
-			return;
-		}
-
-		if (cc == ContactorControl.ON_GRID) {
-			// TODO: Implement error handling or prevention on system temperature errors/
-			// low voltage/...
-		}
 	}
 
 	public String getModbusBridgeId() {
@@ -316,10 +342,6 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 	}
 
 	private void startSystem() {
-		if (isStopping) {
-			return;
-		}
-
 		IntegerWriteChannel contactorControlChannel = this.channel(VersionBChannelId.BMS_CONTACTOR_CONTROL);
 
 		Optional<Integer> contactorControlOpt = contactorControlChannel.value().asOptional();
@@ -348,10 +370,18 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 
 		try {
 			contactorControlChannel.setNextWriteValue(SYSTEM_OFF);
-			isStopping = true;
 		} catch (OpenemsException e) {
 			log.error("Error while trying to stop system\n" + e.getMessage());
 		}
+	}
+
+	public State getStateMachineState() {
+		return state;
+	}
+
+	public void setStateMachineState(State state) {
+		this.state = state;
+		this.channel(VersionBChannelId.STATE_MACHINE).setNextValue(this.state);
 	}
 
 	@Override
