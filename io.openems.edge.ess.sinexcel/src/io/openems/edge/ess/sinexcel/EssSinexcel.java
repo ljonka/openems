@@ -81,8 +81,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		
 		DCRelay();
 		doChannelMapping();
-	 	Inverter_ON();
-//		Reset_DC_AC_Energy();
+//	 	Inverter_ON();
+		Reset_DC_AC_Energy();
 	}
 
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
@@ -358,23 +358,13 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 			this.channel(SymmetricEss.ChannelId.SOC).setNextValue(value.get());
 		});
 
-		this.battery.getSoh().onChange(value -> {
-//			this.getSoc().setNextValue(value.get());
-			this.channel(ChannelId.BAT_SOH).setNextValue(value.get());
-		});
 
 		this.battery.getBatteryTemp().onChange(value -> {
-//			this.getSoc().setNextValue(value.get());
 			this.channel(ChannelId.BAT_TEMP).setNextValue(value.get());
 		});
 
-		this.battery.getMinimalCellVoltage().onChange(value -> {
-//			this.getSoc().setNextValue(value.get());
-			this.channel(ChannelId.BAT_MIN_CELL_VOLTAGE).setNextValue(value.get());
-		});
 
 		this.battery.getVoltage().onChange(value -> {
-//			this.getSoc().setNextValue(value.get());
 			this.channel(ChannelId.BAT_VOLTAGE).setNextValue(value.get());
 		});
 	}
@@ -389,7 +379,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		int disMinV = battery.getDischargeMinVoltage().value().orElse(0);
 		int chaMaxV = battery.getChargeMaxVoltage().value().orElse(0);
 		
-		IntegerWriteChannel  SET_DIS_MIN_V = this.channel(ChannelId.DIS_MIN_V);
+		IntegerWriteChannel SET_DIS_MIN_V = this.channel(ChannelId.DIS_MIN_V);
 		IntegerWriteChannel SET_CHA_MAX_V = this.channel(ChannelId.CHA_MAX_V);
 		IntegerWriteChannel SET_DIS_MAX_A = this.channel(ChannelId.DIS_MAX_A);
 		IntegerWriteChannel SET_CHA_MAX_A = this.channel(ChannelId.CHA_MAX_A);
@@ -406,24 +396,21 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	
 	
 	public void Inverter_ON() {
+		System.out.println("Inverter_ON() " + this.hashCode());
 		IntegerWriteChannel SETDATA_ModOnCmd = this.channel(ChannelId.SETDATA_MOD_ON_CMD);
-//		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SETDATA_MOD_OFF_CMD);
 		try {
 			SETDATA_ModOnCmd.setNextWriteValue(START); // Here: START = 1
-//			SETDATA_ModOffCmd.setNextWriteValue(2);
-//			log.info("startSystem: SETDATA_MOD_ON_CMD");
 		} catch (OpenemsException e) {
 			log.error("problem occurred while trying to start inverter" + e.getMessage());
 		}
 	}
 
 	public void Inverter_OFF() {
+		System.out.println("Inverter_OFF() " + this.hashCode());
+
 		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SETDATA_MOD_OFF_CMD);
-//		IntegerWriteChannel SETDATA_ModOnCmd = this.channel(ChannelId.SETDATA_MOD_ON_CMD);
 		try {
 			SETDATA_ModOffCmd.setNextWriteValue(STOP); // Here: STOP = 1
-//			SETDATA_ModOnCmd.setNextWriteValue(0);
-//			log.info("stopSystem: SETDATA_MOD_OFF_CMD");
 		} catch (OpenemsException e) {
 			log.error("problem occurred while trying to stop system" + e.getMessage());
 		}
@@ -865,15 +852,10 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	
 	@Override
 	public String debugLog() {
-		return "\nState:\t\t" + this.channel(ChannelId.Sinexcel_State).value().asOptionString() //
-				+ "\nDC Power:\t" + this.channel(ChannelId.DC_Power).value().asStringWithoutUnit() +" kW"
-				+ "\nDC Current:\t" + this.channel(ChannelId.DC_Current).value().asStringWithoutUnit() +" A"
-				+ "\nDC Voltage:\t" + this.channel(ChannelId.DC_Voltage).value().asStringWithoutUnit() +" V"
-				+ "\nAC Power: \t" + this.channel(ChannelId.AC_Power).value().asStringWithoutUnit() + " W?\n"
-//				+ "\nAC Charge Energy:\t" + this.channel(ChannelId.Analog_CHARGE_Energy).value().asStringWithoutUnit() + " kWh"
-//				+ "\nAC Discharge Energy:\t" + this.channel(ChannelId.Analog_DISCHARGE_Energy).value().asStringWithoutUnit() + " kWh"
-//				+ "\nDC Charge Energy:\t" + this.channel(ChannelId.Analog_DC_CHARGE_Energy).value().asStringWithoutUnit() + " kWh"
-//				+ "\nDC Discharge Energy:\t" + this.channel(ChannelId.Analog_DC_DISCHARGE_Energy).value().asStringWithoutUnit() + " kWh\n"	
+		return "\nState: \t\t" + this.channel(ChannelId.Sinexcel_State).value().asOptionString() //
+				+ "\nDC Power: \t" + this.channel(ChannelId.DC_Power).value().asStringWithoutUnit() +" kW"
+				+ "\nDC Current: \t" + this.channel(ChannelId.DC_Current).value().asStringWithoutUnit() +" A"
+				+ "\nDC Voltage: \t" + this.channel(ChannelId.BAT_VOLTAGE).value().asStringWithoutUnit() +" V\n"
 				;
 	}
 	
@@ -893,8 +875,20 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		}
 	}
 	
+	
 	@Override
 	public void applyPower(int activePower, int reactivePower) {
+		System.out.println("applyPower() " + this.hashCode() + ": " + activePower + " W");
+		
+		switch (this.InverterState) {
+		case ON:
+			Inverter_ON();
+			break;
+		case OFF:
+			Inverter_OFF();
+			break;
+		}
+		
 		IntegerWriteChannel SET_ACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_ACTIVE);
 		IntegerWriteChannel SET_REACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_REACTIVE);
 
@@ -925,7 +919,6 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	public LocalDateTime timeForSystemInitialization = null;
 
 	private static final int MAX_ACTIVE_POWER = 300; // 30 kW
-
 	private static final int DISABLED_ANTI_ISLANDING = 0;
 	private static final int ENABLED_ANTI_ISLANDING = 1;
 	private static final int START = 1;
@@ -933,8 +926,6 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private static final int SLOW_CHARGE_VOLTAGE = 4370; // Slow and Float Charge Voltage must be the same for the Lithium Ionbattery.
 	private static final int FLOAT_CHARGE_VOLTAGE = 4370;
 
-//	private int ACTIVE = 0;							// [ACTIVE] = kW	// Range = -30 kW ... 30 kW	// ACTIVE < 0 -> CHARGE //	ACTIVE > 0 ->DISCHARGE 
-//	private int REACTIVE = 0;						// [REACTIVE] = kVAr	// Range = -30 kW ... 30 //REACTIVE < 0 -> inductive // REACTIVE > 0 -> capacitive
 	
 	
 
@@ -948,29 +939,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
 			setBatteryRanges();
 			doHandling_SLOW_FLOAT_VOLTAGE();
-			
-			switch (this.InverterState) {
-			case ON:
-				Inverter_ON();
-				break;
-			case OFF:
-				Inverter_OFF();
-				break;
-			}
-			
-//			if (battery.getReadyForWorking().value().orElse(false) && a == true)
-//			{	
-//				DCRelay();
-//				Inverter_ON();
-//				a = false;
-//			}
-//			else if(!battery.getReadyForWorking().value().orElse(false) && a == false)  
-//			{
-//				Inverter_OFF();
-//				log.info("----------->Battery is not ready<------------");
-//				a = true;
-//			}
-			
+												
 //			if(island = true) {
 //				ISLANDING_ON();
 //			}
