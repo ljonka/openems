@@ -36,6 +36,12 @@ public class TaskManager<T extends ManagedTask> {
 			break;
 		}
 	}
+	
+	public void removeTask(T task) {
+		prioHighTasks.remove(task);
+		prioLowTasks.remove(task);
+		prioOnceTasks.remove(task);
+	}
 
 	public synchronized List<T> getNextReadTasks() {
 		List<T> result = new ArrayList<>();

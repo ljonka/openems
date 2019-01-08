@@ -58,6 +58,13 @@ public class ModbusProtocol {
 	}
 
 	public synchronized void removeTask(Task task) {
+		if (task instanceof WriteTask) {
+			this.writeTaskManager.removeTask((WriteTask) task);
+		}
+
+		if (task instanceof ReadTask) {
+			this.readTaskManager.removeTask((ReadTask) task);
+		}
 	}
 
 	/**
