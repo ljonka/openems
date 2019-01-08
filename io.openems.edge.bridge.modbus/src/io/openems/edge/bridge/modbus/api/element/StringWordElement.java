@@ -14,7 +14,7 @@ import com.ghgande.j2mod.modbus.procimg.SimpleRegister;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.types.OpenemsType;
 
-public class StringWordElement extends AbstractModbusRegisterElement<String> {
+public class StringWordElement extends AbstractModbusRegisterElement<StringWordElement, String> {
 	
 	private final static ByteOrder DEFAULT_BYTE_ORDER = ByteOrder.BIG_ENDIAN;
 
@@ -67,10 +67,10 @@ public class StringWordElement extends AbstractModbusRegisterElement<String> {
 		}
 	}
 
-	public StringWordElement byteOrder(ByteOrder byteOrder) {
-		this.byteOrder = byteOrder;
-		return this;
-	}
+//	public StringWordElement byteOrder(ByteOrder byteOrder) {
+//		this.byteOrder = byteOrder;
+//		return this;
+//	}
 
 	protected String fromByteBuffer(ByteBuffer buff) {
 		return new String(buff.array());
@@ -79,6 +79,11 @@ public class StringWordElement extends AbstractModbusRegisterElement<String> {
 	protected ByteBuffer toByteBuffer(ByteBuffer buff, String value) {
 		ByteBuffer b = ByteBuffer.wrap(value.getBytes());
 		return b;
+	}
+
+	@Override
+	protected StringWordElement self() {
+		return this;
 	}
 
 }

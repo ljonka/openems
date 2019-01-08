@@ -2,6 +2,7 @@ package io.openems.edge.ess.sinexcel;
 import io.openems.edge.common.channel.doc.OptionsEnum;
 
 public enum CurrentState implements OptionsEnum {
+	UNDEFINED(-1, "Undefined"),
 	OFF(1, "Off"),
 	SLEEPING(2, "Sleeping"),
 	STARTING(3, "Starting"),
@@ -25,9 +26,20 @@ public enum CurrentState implements OptionsEnum {
 		return value;
 	}
 
+//	@Override
+//	public String getOption() {
+//		return option;
+//	}
+
 	@Override
-	public String getOption() {
+	public String getName() {
+		// TODO Auto-generated method stub
 		return option;
+	}
+
+	@Override
+	public OptionsEnum getUndefined() {
+		return UNDEFINED;
 	}
 
 }

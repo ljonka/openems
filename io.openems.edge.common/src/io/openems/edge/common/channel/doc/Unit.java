@@ -67,10 +67,7 @@ public enum Unit {
 	 * Unit of Voltage [V]
 	 */
 	VOLT("V"),
-	/**
-	 * Unit of Voltage [V]
-	 */
-	NEW_VOLT("V", VOLT, -1),
+	
 	/**
 	 * Unit of Voltage [mV]
 	 */
@@ -106,6 +103,11 @@ public enum Unit {
 	 */
 	KILO_VOLT_AMPERE_REACTIVE_HOURS("kVArh"),
 
+	/**
+	 * Unit of Energy [Wh/Wp]
+	 */
+	WATT_HOURS_BY_WATT_PEAK("Wh/Wp"),
+
 	/*
 	 * Frequency
 	 */
@@ -126,11 +128,11 @@ public enum Unit {
 	/**
 	 * Unit of Temperature [�C]
 	 */
-	DEGREE_CELSIUS("°C"),
+	DEGREE_CELSIUS("�C"),
 	/**
 	 * Unit of Temperature [d�C]
 	 */
-	DEZIDEGREE_CELSIUS("d°C", DEGREE_CELSIUS, -1),
+	DEZIDEGREE_CELSIUS("d�C", DEGREE_CELSIUS, -1),
 
 	/*
 	 * Time
