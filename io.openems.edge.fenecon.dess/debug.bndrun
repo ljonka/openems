@@ -1,8 +1,8 @@
 #
-# io.openems.edge.ess.sinexcel DEBUG LAUNCH SPECFICATION 
+# io.openems.edge.fenecon.dess DEBUG LAUNCH SPECFICATION 
 #
 
--include: ~io.openems.edge.ess.sinexcel.bndrun
+-include: ~io.openems.edge.fenecon.dess.bndrun
 
 -runrequires.debug:  \
 	${debug-bundles}

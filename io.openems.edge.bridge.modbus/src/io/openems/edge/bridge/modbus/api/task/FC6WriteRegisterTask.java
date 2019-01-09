@@ -31,7 +31,7 @@ public class FC6WriteRegisterTask extends AbstractTask implements WriteTask {
 
 		if (element instanceof AbstractWordElement<?, ?>) {
 
-			Optional<Register[]> valueOpt = ((AbstractWordElement<?, ?>) element).getNextWriteValue();
+			Optional<Register[]> valueOpt = ((AbstractWordElement<?, ?>) element).getNextWriteValueAndReset();
 			if (valueOpt.isPresent()) {
 				Register[] registers = valueOpt.get();
 
@@ -44,10 +44,6 @@ public class FC6WriteRegisterTask extends AbstractTask implements WriteTask {
 
 						this.writeSingleRegister(bridge, this.getParent().getUnitId(), this.getStartAddress(),
 								registers[0]);
-						
-						if(getStartAddress() == 650 || getStartAddress() == 651) {
-							System.out.println("-------------->Address: " + getStartAddress() + " = " + registers[0]);
-						}
 						
 					} catch (OpenemsException | ModbusException e) {
 						/*
