@@ -1,6 +1,5 @@
 package io.openems.edge.battery.soltaro.versionb;
 
-import io.openems.edge.battery.soltaro.master.State;
 import io.openems.edge.battery.soltaro.versionb.VersionBEnums.AutoSetFunction;
 import io.openems.edge.battery.soltaro.versionb.VersionBEnums.ChargeIndication;
 import io.openems.edge.battery.soltaro.versionb.VersionBEnums.ClusterRunState;

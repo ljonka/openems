@@ -12,6 +12,7 @@ public enum State implements OptionsEnum {
 	STOPPING("Stopping", 4),
 	ERROR("Error", 5),
 	ERRORDELAY("Errordelay", 6),
+	CONFIGURING("Configuring", 7);
 	;
 
 	private State(String option, int value) {

@@ -1,6 +1,8 @@
 package io.openems.edge.battery.soltaro.versionb;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Optional;
 
 import org.osgi.service.cm.ConfigurationAdmin;
@@ -22,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.battery.api.Battery;
+import io.openems.edge.battery.soltaro.versionb.VersionBEnums.AutoSetFunction;
 import io.openems.edge.battery.soltaro.versionb.VersionBEnums.ContactorControl;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
@@ -58,16 +61,14 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 	protected final static int SYSTEM_ON = 1;
 	protected final static int SYSTEM_OFF = 0;
 
-//	private static final int SECURITY_INTERVAL_FOR_COMMANDS_IN_SECONDS = 3; //nicht mehr noetig wg. state machine die kennt den status init
-//	private static final int MAX_TIME_FOR_INITIALIZATION_IN_SECONDS = 30;
-
 	public static final Integer CAPACITY_KWH = 50;
 
 	private final Logger log = LoggerFactory.getLogger(SoltaroRackVersionB.class);
 
 	private String modbusBridgeId;
 	private State state = State.UNDEFINED;
-//	private int secondsToWaitAlarmLevel2 = 600;
+	// if configuring is needed this is used to go through the necessary steps
+	private ConfiguringProcess nextConfiguringProcess = ConfiguringProcess.NONE;
 
 	@Reference
 	protected ConfigurationAdmin cm;
@@ -94,6 +95,17 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 				"Modbus", config.modbus_id());
 		this.modbusBridgeId = config.modbus_id();
 		initializeCallbacks();
+		
+		setWatchdog(config.watchdog());
+	}
+
+	private void setWatchdog(int time_seconds) {
+		IntegerWriteChannel c = this.channel(VersionBChannelId.EMS_COMMUNICATION_TIMEOUT);
+		try {
+			c.setNextWriteValue(time_seconds);
+		} catch (OpenemsException e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Deactivate
@@ -104,7 +116,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 	void debug(String t) {
 		System.out.println(t);
 	}
-	
+
 	private <T> void initializeCallbacks() {
 
 		this.channel(VersionBChannelId.CLUSTER_1_VOLTAGE).onChange(value -> {
@@ -222,6 +234,12 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 		boolean readyForWorking = false;
 		switch (this.getStateMachineState()) {
 		case ERROR:
+			//TODO if configuring is needed and the values cannot be read from rack the system goes into errordelay, but the time then is too long....
+			// there must be another delay if no error level 2 is recognized??!
+			if (configuringNeeded()) {
+				setStateMachineState(State.CONFIGURING);
+				break;
+			}
 			stopSystem();
 			errorDelayIsOver = LocalDateTime.now().plusSeconds(config.errorLevel2Delay());
 			setStateMachineState(State.ERRORDELAY);
@@ -293,8 +311,194 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 			this.stopSystem();
 			this.setStateMachineState(State.OFF);
 			break;
+		
+		case CONFIGURING:
+			//
+			configureSlaves();
+			break;
 		}
+		
+		
 		this.getReadyForWorking().setNextValue(readyForWorking);
+	}
+
+	
+	
+	
+	private void configureSlaves() {
+		
+		switch (nextConfiguringProcess) {
+		case CONFIGURING_STARTED:
+			setNumberOfModules();
+			break;
+		case SET_SLAVE_NUMBER:
+			break;
+		case SET_ID_AUTO_CONFIGURING:
+			setIdAutoConfiguring();
+			break;
+		case CHECK_ID_AUTO_CONFIGURING:
+			checkIdAutoConfiguring();
+			break;		
+		case SET_TEMPERATURE_ID_AUTO_CONFIGURING:
+			setTemperatureIdAutoConfiguring();
+			break;
+		case CHECK_TEMPERATURE_ID_AUTO_CONFIGURING:
+			checkTemperatureIdAutoConfiguring();
+			break;
+		case SET_VOLTAGE_RANGES:
+			setVoltageRanges();
+			break;		
+		case CONFIGURING_FINISHED:
+			log.info("====>>> Configuring successful, hardware restart needed! <<<====");
+			break;
+		case NONE:
+			break;
+		}
+	}
+	
+	
+	private void setVoltageRanges() {
+		
+		try {
+			IntegerWriteChannel level1OverVoltageChannel = this.channel(VersionBChannelId.WARN_PARAMETER_SYSTEM_OVER_VOLTAGE_ALARM);
+			level1OverVoltageChannel.setNextWriteValue(this.config.numberOfSlaves() * ModuleParameters.LEVEL_1_TOTAL_OVER_VOLTAGE_MILLIVOLT.getValue());
+
+			IntegerWriteChannel level1OverVoltageChannelRecover = this.channel(VersionBChannelId.WARN_PARAMETER_SYSTEM_OVER_VOLTAGE_RECOVER);
+			level1OverVoltageChannelRecover.setNextWriteValue(this.config.numberOfSlaves() * ModuleParameters.LEVEL_1_TOTAL_OVER_VOLTAGE_RECOVER_MILLIVOLT.getValue());
+
+			IntegerWriteChannel level1LowVoltageChannel = this.channel(VersionBChannelId.WARN_PARAMETER_SYSTEM_UNDER_VOLTAGE_ALARM);
+			level1LowVoltageChannel.setNextWriteValue(this.config.numberOfSlaves() * ModuleParameters.LEVEL_1_TOTAL_LOW_VOLTAGE_MILLIVOLT.getValue());
+
+			IntegerWriteChannel level1LowVoltageChannelRecover = this.channel(VersionBChannelId.WARN_PARAMETER_SYSTEM_UNDER_VOLTAGE_RECOVER);
+			level1LowVoltageChannelRecover.setNextWriteValue(this.config.numberOfSlaves() * ModuleParameters.LEVEL_1_TOTAL_LOW_VOLTAGE_RECOVER_MILLIVOLT.getValue());
+
+			
+			IntegerWriteChannel level2OverVoltageChannel = this.channel(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_PROTECTION);
+			level2OverVoltageChannel.setNextWriteValue(this.config.numberOfSlaves() * ModuleParameters.LEVEL_2_TOTAL_OVER_VOLTAGE_MILLIVOLT.getValue());
+
+			IntegerWriteChannel level2OverVoltageChannelRecover = this.channel(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_RECOVER);
+			level2OverVoltageChannelRecover.setNextWriteValue(this.config.numberOfSlaves() * ModuleParameters.LEVEL_2_TOTAL_OVER_VOLTAGE_RECOVER_MILLIVOLT.getValue());
+
+			IntegerWriteChannel level2LowVoltageChannel = this.channel(VersionBChannelId.STOP_PARAMETER_SYSTEM_UNDER_VOLTAGE_PROTECTION);
+			level2LowVoltageChannel.setNextWriteValue(this.config.numberOfSlaves() * ModuleParameters.LEVEL_2_TOTAL_LOW_VOLTAGE_MILLIVOLT.getValue());
+
+			IntegerWriteChannel level2LowVoltageChannelRecover = this.channel(VersionBChannelId.STOP_PARAMETER_SYSTEM_UNDER_VOLTAGE_RECOVER);
+			level2LowVoltageChannelRecover.setNextWriteValue(this.config.numberOfSlaves() * ModuleParameters.LEVEL_2_TOTAL_LOW_VOLTAGE_RECOVER_MILLIVOLT.getValue());
+			
+			nextConfiguringProcess = ConfiguringProcess.CONFIGURING_FINISHED;
+			
+		} catch (OpenemsException e) {
+			log.error("Setting voltage ranges not successful!");
+		}
+		
+	}
+
+	private void checkTemperatureIdAutoConfiguring() {
+		IntegerReadChannel autoSetTemperatureSlavesIdChannel = this.channel(VersionBChannelId.AUTO_SET_SLAVES_TEMPERATURE_ID);
+		Optional<Integer> autoSetTemperatureSlavesIdOpt = autoSetTemperatureSlavesIdChannel.value().asOptional();
+		if (!autoSetTemperatureSlavesIdOpt.isPresent()) {
+			return;
+		}
+		int autoSetTemperatureSlaves = autoSetTemperatureSlavesIdOpt.get();
+		if (autoSetTemperatureSlaves == VersionBEnums.AutoSetFunction.FAILURE.getValue()) {
+			log.error("Auto set temperature slaves id failed!");
+			//Auto set failed, try again
+			nextConfiguringProcess = ConfiguringProcess.SET_TEMPERATURE_ID_AUTO_CONFIGURING;
+		} else if (autoSetTemperatureSlaves == VersionBEnums.AutoSetFunction.SUCCES.getValue()) {
+			log.info("Auto set temperature slaves id succeeded!");
+			nextConfiguringProcess = ConfiguringProcess.SET_VOLTAGE_RANGES;
+		}
+	}
+	
+
+	private void setTemperatureIdAutoConfiguring() {
+
+		IntegerWriteChannel autoSetSlavesTemperatureIdChannel = this.channel(VersionBChannelId.AUTO_SET_SLAVES_TEMPERATURE_ID);
+		try {
+			autoSetSlavesTemperatureIdChannel.setNextWriteValue(AutoSetFunction.START_AUTO_SETTING.getValue());
+			nextConfiguringProcess = ConfiguringProcess.CHECK_TEMPERATURE_ID_AUTO_CONFIGURING;
+		} catch (OpenemsException e) {
+			log.error("Setting temperature id auto set not successful"); //Set was not successful, it will be tried until it succeeded 
+		}
+	}
+
+	private void checkIdAutoConfiguring() {
+		IntegerReadChannel autoSetSlavesIdChannel = this.channel(VersionBChannelId.AUTO_SET_SLAVES_ID);
+		Optional<Integer> autoSetSlavesIdOpt = autoSetSlavesIdChannel.value().asOptional();
+		if (!autoSetSlavesIdOpt.isPresent()) {
+			return;
+		}
+		int autoSetSlaves = autoSetSlavesIdOpt.get();
+		if (autoSetSlaves == VersionBEnums.AutoSetFunction.FAILURE.getValue()) {
+			log.error("Auto set slaves id failed!");
+			//Auto set failed, try again
+			nextConfiguringProcess = ConfiguringProcess.SET_ID_AUTO_CONFIGURING;
+		} else if (autoSetSlaves == VersionBEnums.AutoSetFunction.SUCCES.getValue()) {
+			log.info("Auto set slaves id succeeded!");
+			nextConfiguringProcess = ConfiguringProcess.SET_TEMPERATURE_ID_AUTO_CONFIGURING;
+		}
+	}
+
+	private void setIdAutoConfiguring() {
+		//Set number of modules
+				IntegerWriteChannel autoSetSlavesIdChannel = this.channel(VersionBChannelId.AUTO_SET_SLAVES_ID);
+				try {
+					autoSetSlavesIdChannel.setNextWriteValue(AutoSetFunction.START_AUTO_SETTING.getValue());
+					nextConfiguringProcess = ConfiguringProcess.CHECK_ID_AUTO_CONFIGURING;
+				} catch (OpenemsException e) {
+					log.error("Setting slave numbers not successful"); //Set was not successful, it will be tried until it succeeded 
+				}
+	}
+
+	private void setNumberOfModules() {
+		//Set number of modules
+		IntegerWriteChannel numberOfSlavesChannel = this.channel(VersionBChannelId.WORK_PARAMETER_PCS_COMMUNICATION_RATE);
+		try {
+			numberOfSlavesChannel.setNextWriteValue(this.config.numberOfSlaves());
+			nextConfiguringProcess = ConfiguringProcess.SET_SLAVE_NUMBER;
+		} catch (OpenemsException e) {
+			log.error("Setting slave numbers not successful"); //Set was not successful, it will be tried until it succeeded 
+		}
+	}
+	
+	
+	
+	private enum ConfiguringProcess {
+		NONE,
+		CONFIGURING_STARTED,
+		SET_SLAVE_NUMBER,
+		SET_ID_AUTO_CONFIGURING,
+
+		CHECK_ID_AUTO_CONFIGURING,
+		SET_TEMPERATURE_ID_AUTO_CONFIGURING,
+		CHECK_TEMPERATURE_ID_AUTO_CONFIGURING,
+		SET_VOLTAGE_RANGES,
+		CONFIGURING_FINISHED
+	}
+
+	private boolean configuringNeeded() {
+		@SuppressWarnings("unchecked")
+		Optional<Integer> numberOfSlavesOpt = (Optional<Integer>) this.channel(VersionBChannelId.WORK_PARAMETER_PCS_COMMUNICATION_RATE).value().asOptional();
+		if (! numberOfSlavesOpt.isPresent()) {
+			return false;
+		}
+		
+		int numberOfModules = numberOfSlavesOpt.get();
+		if (numberOfModules != this.config.numberOfSlaves()) {
+			return true;
+		}
+		
+		@SuppressWarnings("unchecked")
+		Optional<Integer> systemVoltageVoltOpt = (Optional<Integer>) this.channel(VersionBChannelId.CLUSTER_1_VOLTAGE).value().asOptional();
+		if (!systemVoltageVoltOpt.isPresent()) {
+			return false;
+		}
+		int systemVoltageVolt = systemVoltageVoltOpt.get();
+		int lowerRange = this.config.numberOfSlaves() * ModuleParameters.MIN_VOLTAGE_VOLT.getValue();
+		int upperRange = this.config.numberOfSlaves() * ModuleParameters.MAX_VOLTAGE_VOLT.getValue();
+		boolean voltageCorrect = lowerRange <= systemVoltageVolt && systemVoltageVolt <= upperRange; 
+		
+		return !voltageCorrect && isSlaveCommunicationError();
 	}
 
 	private boolean isSystemStatePending() { // System is pending if it is definitely not started and not stopped
@@ -317,26 +521,65 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 		return ccOpt.isPresent() && ccOpt.get() == ContactorControl.CUT_OFF;
 	}
 
+	private boolean isAlarmLevel2Error() {
+		return (readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_HIGH)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_HIGH)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_CHA_CURRENT_HIGH)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_LOW)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_LOW)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_DISCHA_CURRENT_HIGH)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_CHA_TEMP_HIGH)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_CHA_TEMP_LOW)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_SOC_LOW)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_TEMPERATURE_DIFFERENCE_HIGH)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_POLES_TEMPERATURE_DIFFERENCE_HIGH)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_DIFFERENCE_HIGH)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_INSULATION_LOW)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_DIFFERENCE_HIGH)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_DISCHA_TEMP_HIGH)
+				|| readValueFromBooleanChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_DISCHA_TEMP_LOW));
+	}
+	
+	private boolean isSlaveCommunicationError() {
+		return readValueFromBooleanChannel(VersionBChannelId.SLAVE_20_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_19_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_18_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_17_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_16_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_15_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_14_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_13_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_12_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_11_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_10_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_9_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_8_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_7_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_6_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_5_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_4_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_3_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_2_COMMUNICATION_ERROR)
+		|| readValueFromBooleanChannel(VersionBChannelId.SLAVE_1_COMMUNICATION_ERROR);
+	}
 	private boolean isError() {
-		return (readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_HIGH)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_HIGH)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CHA_CURRENT_HIGH)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_LOW)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_LOW)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_DISCHA_CURRENT_HIGH)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_CHA_TEMP_HIGH)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_CHA_TEMP_LOW)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_SOC_LOW)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TEMPERATURE_DIFFERENCE_HIGH)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_POLES_TEMPERATURE_DIFFERENCE_HIGH)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_VOLTAGE_DIFFERENCE_HIGH)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_INSULATION_LOW)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_TOTAL_VOLTAGE_DIFFERENCE_HIGH)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_DISCHA_TEMP_HIGH)
-				|| readValueFromChannel(VersionBChannelId.ALARM_LEVEL_2_CELL_DISCHA_TEMP_LOW));
+		return isAlarmLevel2Error() || isSlaveCommunicationError();
 	}
 
-	private boolean readValueFromChannel(VersionBChannelId channelId) {
+	// Collects errors/warnings
+	private Collection<ErrorCode> getErrorCodes() {
+		Collection<ErrorCode> codes = new ArrayList<>();
+
+		for (ErrorCode code : ErrorCode.values()) {
+			if (code.getErrorChannelId() != null && readValueFromBooleanChannel(code.getErrorChannelId())) {
+				codes.add(ErrorCode.getErrorCode(code.getErrorChannelId()));
+			}
+		}
+
+		return codes;
+	}
+
+	private boolean readValueFromBooleanChannel(VersionBChannelId channelId) {
 		StateChannel r = this.channel(channelId);
 		Optional<Boolean> bOpt = r.value().asOptional();
 		return bOpt.isPresent() && bOpt.get();
@@ -356,12 +599,15 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 	private void startSystem() {
 		IntegerWriteChannel contactorControlChannel = this.channel(VersionBChannelId.BMS_CONTACTOR_CONTROL);
 
-//		Optional<Integer> contactorControlOpt = contactorControlChannel.value().asOptional();
-//		// To avoid hardware damages do not send start command if system has already
-//		// started
-//		if (contactorControlOpt.isPresent() && contactorControlOpt.get() == ContactorControl.ON_GRID.getValue()) {
-//			return;
-//		}
+		Optional<Integer> contactorControlOpt = contactorControlChannel.value().asOptional();
+		// To avoid hardware damages do not send start command if system has already
+		// started
+		if (contactorControlOpt.isPresent() && (
+				contactorControlOpt.get() == ContactorControl.ON_GRID.getValue() ||
+				contactorControlOpt.get() == ContactorControl.CONNECTION_INITIATING.getValue()
+		)) {
+			return;
+		}
 
 		try {
 			debug("write value to contactor control channel: value: " + SYSTEM_OFF);
@@ -393,6 +639,13 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 	}
 
 	public void setStateMachineState(State state) {
+		
+		if (state == State.ERROR) {
+			for (ErrorCode c : getErrorCodes()) {
+				log.info("Error detected: " + c.getOption());
+			}
+		}
+		
 		this.state = state;
 		this.channel(VersionBChannelId.STATE_MACHINE).setNextValue(this.state);
 	}
@@ -424,7 +677,9 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 								new UnsignedWordElement(0x2040)), //
 						m(VersionBChannelId.STOP_PARAMETER_CELL_OVER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2041)), //
 						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_PROTECTION,
-								new UnsignedWordElement(0x2042), ElementToChannelConverter.SCALE_FACTOR_2), //  TODO Check if correct!
+								new UnsignedWordElement(0x2042), ElementToChannelConverter.SCALE_FACTOR_2), // TODO
+																											// Check if
+																											// correct!
 						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2043),
 								ElementToChannelConverter.SCALE_FACTOR_2), //
 						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_PROTECTION,
@@ -485,71 +740,71 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 				),
 
 //				//Warn parameter
-//				new FC16WriteRegistersTask(0x2080, //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_VOLTAGE_ALARM,
-//								new UnsignedWordElement(0x2080)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2081)), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_OVER_VOLTAGE_ALARM,
-//								new UnsignedWordElement(0x2082), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_OVER_VOLTAGE_RECOVER, 
-//								new UnsignedWordElement(0x2083), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_ALARM,
-//								new UnsignedWordElement(0x2084), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_RECOVER,
-//								new UnsignedWordElement(0x2085), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_VOLTAGE_ALARM,
-//								new UnsignedWordElement(0x2086)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2087)), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_UNDER_VOLTAGE_ALARM,
-//								new UnsignedWordElement(0x2088), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_UNDER_VOLTAGE_RECOVER,
-//								new UnsignedWordElement(0x2089), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_DISCHARGE_OVER_CURRENT_ALARM,
-//								new UnsignedWordElement(0x208A), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_DISCHARGE_OVER_CURRENT_RECOVER,
-//								new UnsignedWordElement(0x208B), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_TEMPERATURE_ALARM,
-//								new UnsignedWordElement(0x208C)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_TEMPERATURE_RECOVER,
-//								new UnsignedWordElement(0x208D)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_TEMPERATURE_ALARM,
-//								new UnsignedWordElement(0x208E)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_TEMPERATURE_RECOVER,
-//								new UnsignedWordElement(0x208F)), //
-//						m(VersionBChannelId.WARN_PARAMETER_SOC_LOW_ALARM, new UnsignedWordElement(0x2090)), //
-//						m(VersionBChannelId.WARN_PARAMETER_SOC_LOW_ALARM_RECOVER, new UnsignedWordElement(0x2091)), //
-//						m(VersionBChannelId.WARN_PARAMETER_SOC_HIGH_ALARM, new UnsignedWordElement(0x2092)), //
-//						m(VersionBChannelId.WARN_PARAMETER_SOC_HIGH_ALARM_RECOVER,
-//								new UnsignedWordElement(0x2093)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CONNECTOR_TEMPERATURE_HIGH_ALARM,
-//								new UnsignedWordElement(0x2094)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CONNECTOR_TEMPERATURE_HIGH_ALARM_RECOVER,
-//								new UnsignedWordElement(0x2095)), //
-//						m(VersionBChannelId.WARN_PARAMETER_INSULATION_ALARM, new UnsignedWordElement(0x2096)), //
-//						m(VersionBChannelId.WARN_PARAMETER_INSULATION_ALARM_RECOVER,
-//								new UnsignedWordElement(0x2097)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_VOLTAGE_DIFFERENCE_ALARM,
-//								new UnsignedWordElement(0x2098)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_VOLTAGE_DIFFERENCE_ALARM_RECOVER,
-//								new UnsignedWordElement(0x2099)), //
-//						m(VersionBChannelId.WARN_PARAMETER_TOTAL_VOLTAGE_DIFFERENCE_ALARM,
-//								new UnsignedWordElement(0x209A), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_TOTAL_VOLTAGE_DIFFERENCE_ALARM_RECOVER,
-//								new UnsignedWordElement(0x209B), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_HIGH_ALARM,
-//								new UnsignedWordElement(0x209C)), //
-//						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_HIGH_ALARM_RECOVER,
-//								new UnsignedWordElement(0x209D)), //
-//						new DummyRegisterElement(0x209E),
-//						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_LOW_ALARM,
-//								new UnsignedWordElement(0x209F)), //
-//						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_LOW_ALARM_RECOVER,
-//								new UnsignedWordElement(0x20A0)), //
-//						m(VersionBChannelId.WARN_PARAMETER_TEMPERATURE_DIFFERENCE_ALARM,
-//								new UnsignedWordElement(0x20A1)), //
-//						m(VersionBChannelId.WARN_PARAMETER_TEMPERATURE_DIFFERENCE_ALARM_RECOVER,
-//								new UnsignedWordElement(0x20A2)) //
-//				),
+				new FC16WriteRegistersTask(0x2080, //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_VOLTAGE_ALARM,
+								new UnsignedWordElement(0x2080)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2081)), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_OVER_VOLTAGE_ALARM,
+								new UnsignedWordElement(0x2082), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_OVER_VOLTAGE_RECOVER, 
+								new UnsignedWordElement(0x2083), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_ALARM,
+								new UnsignedWordElement(0x2084), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_RECOVER,
+								new UnsignedWordElement(0x2085), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_VOLTAGE_ALARM,
+								new UnsignedWordElement(0x2086)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2087)), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_UNDER_VOLTAGE_ALARM,
+								new UnsignedWordElement(0x2088), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_UNDER_VOLTAGE_RECOVER,
+								new UnsignedWordElement(0x2089), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_DISCHARGE_OVER_CURRENT_ALARM,
+								new UnsignedWordElement(0x208A), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_DISCHARGE_OVER_CURRENT_RECOVER,
+								new UnsignedWordElement(0x208B), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_TEMPERATURE_ALARM,
+								new UnsignedWordElement(0x208C)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_TEMPERATURE_RECOVER,
+								new UnsignedWordElement(0x208D)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_TEMPERATURE_ALARM,
+								new UnsignedWordElement(0x208E)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_TEMPERATURE_RECOVER,
+								new UnsignedWordElement(0x208F)), //
+						m(VersionBChannelId.WARN_PARAMETER_SOC_LOW_ALARM, new UnsignedWordElement(0x2090)), //
+						m(VersionBChannelId.WARN_PARAMETER_SOC_LOW_ALARM_RECOVER, new UnsignedWordElement(0x2091)), //
+						m(VersionBChannelId.WARN_PARAMETER_SOC_HIGH_ALARM, new UnsignedWordElement(0x2092)), //
+						m(VersionBChannelId.WARN_PARAMETER_SOC_HIGH_ALARM_RECOVER,
+								new UnsignedWordElement(0x2093)), //
+						m(VersionBChannelId.WARN_PARAMETER_CONNECTOR_TEMPERATURE_HIGH_ALARM,
+								new UnsignedWordElement(0x2094)), //
+						m(VersionBChannelId.WARN_PARAMETER_CONNECTOR_TEMPERATURE_HIGH_ALARM_RECOVER,
+								new UnsignedWordElement(0x2095)), //
+						m(VersionBChannelId.WARN_PARAMETER_INSULATION_ALARM, new UnsignedWordElement(0x2096)), //
+						m(VersionBChannelId.WARN_PARAMETER_INSULATION_ALARM_RECOVER,
+								new UnsignedWordElement(0x2097)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_VOLTAGE_DIFFERENCE_ALARM,
+								new UnsignedWordElement(0x2098)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_VOLTAGE_DIFFERENCE_ALARM_RECOVER,
+								new UnsignedWordElement(0x2099)), //
+						m(VersionBChannelId.WARN_PARAMETER_TOTAL_VOLTAGE_DIFFERENCE_ALARM,
+								new UnsignedWordElement(0x209A), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_TOTAL_VOLTAGE_DIFFERENCE_ALARM_RECOVER,
+								new UnsignedWordElement(0x209B), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_HIGH_ALARM,
+								new UnsignedWordElement(0x209C)), //
+						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_HIGH_ALARM_RECOVER,
+								new UnsignedWordElement(0x209D)), //
+						new DummyRegisterElement(0x209E),
+						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_LOW_ALARM,
+								new UnsignedWordElement(0x209F)), //
+						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_LOW_ALARM_RECOVER,
+								new UnsignedWordElement(0x20A0)), //
+						m(VersionBChannelId.WARN_PARAMETER_TEMPERATURE_DIFFERENCE_ALARM,
+								new UnsignedWordElement(0x20A1)), //
+						m(VersionBChannelId.WARN_PARAMETER_TEMPERATURE_DIFFERENCE_ALARM_RECOVER,
+								new UnsignedWordElement(0x20A2)) //
+				),
 
 				// Control registers
 				new FC3ReadRegistersTask(0x2000, Priority.HIGH, //
@@ -623,7 +878,9 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 								new UnsignedWordElement(0x2040)), //
 						m(VersionBChannelId.STOP_PARAMETER_CELL_OVER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2041)), //
 						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_PROTECTION,
-								new UnsignedWordElement(0x2042), ElementToChannelConverter.SCALE_FACTOR_2), //  TODO Check if correct!
+								new UnsignedWordElement(0x2042), ElementToChannelConverter.SCALE_FACTOR_2), // TODO
+																											// Check if
+																											// correct!
 						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_OVER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2043),
 								ElementToChannelConverter.SCALE_FACTOR_2), //
 						m(VersionBChannelId.STOP_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_PROTECTION,
@@ -684,71 +941,71 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 				),
 
 //				// Warn parameter
-//				new FC3ReadRegistersTask(0x2080, Priority.LOW, //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_VOLTAGE_ALARM,
-//								new UnsignedWordElement(0x2080)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2081)), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_OVER_VOLTAGE_ALARM,
-//								new UnsignedWordElement(0x2082), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_OVER_VOLTAGE_RECOVER, 
-//								new UnsignedWordElement(0x2083), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_ALARM,
-//								new UnsignedWordElement(0x2084), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_RECOVER,
-//								new UnsignedWordElement(0x2085), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_VOLTAGE_ALARM,
-//								new UnsignedWordElement(0x2086)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2087)), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_UNDER_VOLTAGE_ALARM,
-//								new UnsignedWordElement(0x2088), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_UNDER_VOLTAGE_RECOVER,
-//								new UnsignedWordElement(0x2089), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_DISCHARGE_OVER_CURRENT_ALARM,
-//								new UnsignedWordElement(0x208A), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_DISCHARGE_OVER_CURRENT_RECOVER,
-//								new UnsignedWordElement(0x208B), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_TEMPERATURE_ALARM,
-//								new UnsignedWordElement(0x208C)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_TEMPERATURE_RECOVER,
-//								new UnsignedWordElement(0x208D)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_TEMPERATURE_ALARM,
-//								new UnsignedWordElement(0x208E)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_TEMPERATURE_RECOVER,
-//								new UnsignedWordElement(0x208F)), //
-//						m(VersionBChannelId.WARN_PARAMETER_SOC_LOW_ALARM, new UnsignedWordElement(0x2090)), //
-//						m(VersionBChannelId.WARN_PARAMETER_SOC_LOW_ALARM_RECOVER, new UnsignedWordElement(0x2091)), //
-//						m(VersionBChannelId.WARN_PARAMETER_SOC_HIGH_ALARM, new UnsignedWordElement(0x2092)), //
-//						m(VersionBChannelId.WARN_PARAMETER_SOC_HIGH_ALARM_RECOVER,
-//								new UnsignedWordElement(0x2093)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CONNECTOR_TEMPERATURE_HIGH_ALARM,
-//								new UnsignedWordElement(0x2094)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CONNECTOR_TEMPERATURE_HIGH_ALARM_RECOVER,
-//								new UnsignedWordElement(0x2095)), //
-//						m(VersionBChannelId.WARN_PARAMETER_INSULATION_ALARM, new UnsignedWordElement(0x2096)), //
-//						m(VersionBChannelId.WARN_PARAMETER_INSULATION_ALARM_RECOVER,
-//								new UnsignedWordElement(0x2097)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_VOLTAGE_DIFFERENCE_ALARM,
-//								new UnsignedWordElement(0x2098)), //
-//						m(VersionBChannelId.WARN_PARAMETER_CELL_VOLTAGE_DIFFERENCE_ALARM_RECOVER,
-//								new UnsignedWordElement(0x2099)), //
-//						m(VersionBChannelId.WARN_PARAMETER_TOTAL_VOLTAGE_DIFFERENCE_ALARM,
-//								new UnsignedWordElement(0x209A), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_TOTAL_VOLTAGE_DIFFERENCE_ALARM_RECOVER,
-//								new UnsignedWordElement(0x209B), ElementToChannelConverter.SCALE_FACTOR_2), //
-//						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_HIGH_ALARM,
-//								new UnsignedWordElement(0x209C)), //
-//						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_HIGH_ALARM_RECOVER,
-//								new UnsignedWordElement(0x209D)), //
-//						new DummyRegisterElement(0x209E),
-//						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_LOW_ALARM,
-//								new UnsignedWordElement(0x209F)), //
-//						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_LOW_ALARM_RECOVER,
-//								new UnsignedWordElement(0x20A0)), //
-//						m(VersionBChannelId.WARN_PARAMETER_TEMPERATURE_DIFFERENCE_ALARM,
-//								new UnsignedWordElement(0x20A1)), //
-//						m(VersionBChannelId.WARN_PARAMETER_TEMPERATURE_DIFFERENCE_ALARM_RECOVER,
-//								new UnsignedWordElement(0x20A2)) //
-//				),
+				new FC3ReadRegistersTask(0x2080, Priority.LOW, //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_VOLTAGE_ALARM,
+								new UnsignedWordElement(0x2080)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2081)), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_OVER_VOLTAGE_ALARM,
+								new UnsignedWordElement(0x2082), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_OVER_VOLTAGE_RECOVER, 
+								new UnsignedWordElement(0x2083), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_ALARM,
+								new UnsignedWordElement(0x2084), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_CHARGE_OVER_CURRENT_RECOVER,
+								new UnsignedWordElement(0x2085), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_VOLTAGE_ALARM,
+								new UnsignedWordElement(0x2086)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_VOLTAGE_RECOVER, new UnsignedWordElement(0x2087)), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_UNDER_VOLTAGE_ALARM,
+								new UnsignedWordElement(0x2088), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_UNDER_VOLTAGE_RECOVER,
+								new UnsignedWordElement(0x2089), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_DISCHARGE_OVER_CURRENT_ALARM,
+								new UnsignedWordElement(0x208A), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_SYSTEM_DISCHARGE_OVER_CURRENT_RECOVER,
+								new UnsignedWordElement(0x208B), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_TEMPERATURE_ALARM,
+								new UnsignedWordElement(0x208C)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_OVER_TEMPERATURE_RECOVER,
+								new UnsignedWordElement(0x208D)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_TEMPERATURE_ALARM,
+								new UnsignedWordElement(0x208E)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_UNDER_TEMPERATURE_RECOVER,
+								new UnsignedWordElement(0x208F)), //
+						m(VersionBChannelId.WARN_PARAMETER_SOC_LOW_ALARM, new UnsignedWordElement(0x2090)), //
+						m(VersionBChannelId.WARN_PARAMETER_SOC_LOW_ALARM_RECOVER, new UnsignedWordElement(0x2091)), //
+						m(VersionBChannelId.WARN_PARAMETER_SOC_HIGH_ALARM, new UnsignedWordElement(0x2092)), //
+						m(VersionBChannelId.WARN_PARAMETER_SOC_HIGH_ALARM_RECOVER,
+								new UnsignedWordElement(0x2093)), //
+						m(VersionBChannelId.WARN_PARAMETER_CONNECTOR_TEMPERATURE_HIGH_ALARM,
+								new UnsignedWordElement(0x2094)), //
+						m(VersionBChannelId.WARN_PARAMETER_CONNECTOR_TEMPERATURE_HIGH_ALARM_RECOVER,
+								new UnsignedWordElement(0x2095)), //
+						m(VersionBChannelId.WARN_PARAMETER_INSULATION_ALARM, new UnsignedWordElement(0x2096)), //
+						m(VersionBChannelId.WARN_PARAMETER_INSULATION_ALARM_RECOVER,
+								new UnsignedWordElement(0x2097)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_VOLTAGE_DIFFERENCE_ALARM,
+								new UnsignedWordElement(0x2098)), //
+						m(VersionBChannelId.WARN_PARAMETER_CELL_VOLTAGE_DIFFERENCE_ALARM_RECOVER,
+								new UnsignedWordElement(0x2099)), //
+						m(VersionBChannelId.WARN_PARAMETER_TOTAL_VOLTAGE_DIFFERENCE_ALARM,
+								new UnsignedWordElement(0x209A), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_TOTAL_VOLTAGE_DIFFERENCE_ALARM_RECOVER,
+								new UnsignedWordElement(0x209B), ElementToChannelConverter.SCALE_FACTOR_2), //
+						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_HIGH_ALARM,
+								new UnsignedWordElement(0x209C)), //
+						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_HIGH_ALARM_RECOVER,
+								new UnsignedWordElement(0x209D)), //
+						new DummyRegisterElement(0x209E),
+						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_LOW_ALARM,
+								new UnsignedWordElement(0x209F)), //
+						m(VersionBChannelId.WARN_PARAMETER_DISCHARGE_TEMPERATURE_LOW_ALARM_RECOVER,
+								new UnsignedWordElement(0x20A0)), //
+						m(VersionBChannelId.WARN_PARAMETER_TEMPERATURE_DIFFERENCE_ALARM,
+								new UnsignedWordElement(0x20A1)), //
+						m(VersionBChannelId.WARN_PARAMETER_TEMPERATURE_DIFFERENCE_ALARM_RECOVER,
+								new UnsignedWordElement(0x20A2)) //
+				),
 
 				// Work parameter
 				new FC3ReadRegistersTask(0x20C0, Priority.LOW,
