@@ -78,6 +78,9 @@ import io.openems.edge.meter.api.SymmetricMeter;
 public class GridconPCS extends AbstractOpenemsModbusComponent
 		implements ManagedSymmetricEss, SymmetricEss, OpenemsComponent, EventHandler, ModbusSlave {
 
+	private static final int GRIDCON_SWITCH_OFF_TIME_SECONDS = 15;
+	private static final int GRIDCON_BOOT_TIME_SECONDS = 30;
+
 	private final Logger log = LoggerFactory.getLogger(GridconPCS.class);
 
 	protected static final float MAX_POWER_W = 125 * 1000;
@@ -336,7 +339,11 @@ public class GridconPCS extends AbstractOpenemsModbusComponent
 		// a hardware restart has been executed,
 		if (timestampMrGridconWasSwitchedOff != null) {
 			log.info("timestampMrGridconWasSwitchedOff is set: " + timestampMrGridconWasSwitchedOff.toString());
-			if (LocalDateTime.now().isAfter(timestampMrGridconWasSwitchedOff.plusSeconds(15))) {
+			if (
+					LocalDateTime.now().isAfter(timestampMrGridconWasSwitchedOff.plusSeconds(GRIDCON_SWITCH_OFF_TIME_SECONDS)) &&
+					LocalDateTime.now().isBefore(timestampMrGridconWasSwitchedOff.plusSeconds(GRIDCON_SWITCH_OFF_TIME_SECONDS + GRIDCON_BOOT_TIME_SECONDS))
+
+				) {
 				try {
 					log.info("try to write to channel hardware reset, set it to 'false'");
 					// after 15 seconds switch Mr. Gridcon on again!
@@ -347,6 +354,8 @@ public class GridconPCS extends AbstractOpenemsModbusComponent
 					log.error("Problem occurred while deactivating hardware switch!");
 					e.printStackTrace();
 				}
+				
+			} else if (LocalDateTime.now().isAfter(timestampMrGridconWasSwitchedOff.plusSeconds(GRIDCON_SWITCH_OFF_TIME_SECONDS + GRIDCON_BOOT_TIME_SECONDS))) {
 				timestampMrGridconWasSwitchedOff = null;
 			}
 			return;
