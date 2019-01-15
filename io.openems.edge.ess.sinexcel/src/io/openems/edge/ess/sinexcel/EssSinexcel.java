@@ -100,14 +100,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		doChannelMapping();
 		resetDcAcEnergy();
 		
-		switch (this.InverterState) {
-		case ON:
-				inverterOn();
-			break;
-		case OFF:
-				inverterOff();
-			break;
-		}
+		
 		
 			
 	}
@@ -511,6 +504,12 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		Optional<Boolean> islanding = i.getNextValue().asOptional();
 		return islanding.isPresent() && islanding.get();
 	}
+	
+	public boolean stateOnOff() {
+		StateChannel v = this.channel(ChannelId.STATE_18);
+		Optional<Boolean> stateOff = v.getNextValue().asOptional(); 
+		return stateOff.isPresent() && stateOff.get();
+	}
 
 //------------------------------------------------------------------------------------------------------------------	
 
@@ -905,6 +904,28 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		case EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
 			setBatteryRanges();
 			doHandlingSlowFloatVoltage();
+			
+			
+			
+			
+			switch (this.InverterState) {
+			case ON:
+				if(!stateOnOff()) {
+					inverterOn();
+				}
+				else {
+					return;
+				}
+				break;
+			case OFF:
+				if(stateOnOff()) {
+					inverterOff();
+				}
+				else {
+					return;
+				}
+				break;
+			}
 			
 
 //			if(island = true) {
