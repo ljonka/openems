@@ -33,14 +33,12 @@ import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC6WriteRegisterTask;
-import io.openems.edge.bridge.modbus.api.task.WriteTask;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.StateChannel;
 import io.openems.edge.common.channel.WriteChannel;
 import io.openems.edge.common.channel.doc.Doc;
 import io.openems.edge.common.channel.doc.Level;
 import io.openems.edge.common.channel.doc.Unit;
-import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.taskmanager.Priority;
@@ -77,9 +75,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private static final int STOP = 1;
 	private static final int SLOW_CHARGE_VOLTAGE = 4370; // Slow and Float Charge Voltage must be the same for the Lithium Ionbattery.
 	private static final int FLOAT_CHARGE_VOLTAGE = 4370;
-	public int lastActivePowerValue = 0;
-	public int lastReactivePowerValue = 0;
-	public int lastVoltageValue = 0;
+	public int a = 0;
 		
 	@Reference
 	protected ConfigurationAdmin cm;
@@ -99,10 +95,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		relayDc();
 		doChannelMapping();
 		resetDcAcEnergy();
-		
-		
-		
-			
+		inverterOn();
 	}
 
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
@@ -128,14 +121,20 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	public enum ChannelId implements io.openems.edge.common.channel.doc.ChannelId {
 		SUNSPEC_DID_0103(new Doc()), //
 
-		SET_INTERN_DC_RELAY(new Doc().unit(Unit.NONE)), SETDATA_MOD_ON_CMD(new Doc().unit(Unit.ON_OFF)),
-		SETDATA_MOD_OFF_CMD(new Doc().unit(Unit.ON_OFF)), SETDATA_GRID_ON_CMD(new Doc().unit(Unit.ON_OFF)),
-		SETDATA_GRID_OFF_CMD(new Doc().unit(Unit.ON_OFF)), SET_ANTI_ISLANDING(new Doc().unit(Unit.ON_OFF)),
+		SET_INTERN_DC_RELAY(new Doc().unit(Unit.NONE)), 
+		SETDATA_MOD_ON_CMD(new Doc().unit(Unit.ON_OFF)),
+		SETDATA_MOD_OFF_CMD(new Doc().unit(Unit.ON_OFF)), 
+		SETDATA_GRID_ON_CMD(new Doc().unit(Unit.ON_OFF)),
+		SETDATA_GRID_OFF_CMD(new Doc().unit(Unit.ON_OFF)), 
+		SET_ANTI_ISLANDING(new Doc().unit(Unit.ON_OFF)),
 		SET_CHARGE_DISCHARGE_ACTIVE(new Doc().unit(Unit.KILOWATT)), //
 		SET_CHARGE_DISCHARGE_REACTIVE(new Doc().unit(Unit.KILO_VOLT_AMPERE_REACTIVE)), //
-		SET_CHARGE_CURRENT(new Doc().unit(Unit.AMPERE)), SET_DISCHARGE_CURRENT(new Doc().unit(Unit.AMPERE)),
-		SET_SLOW_CHARGE_VOLTAGE(new Doc().unit(Unit.VOLT)), SET_FLOAT_CHARGE_VOLTAGE(new Doc().unit(Unit.VOLT)),
-		SET_UPPER_VOLTAGE(new Doc().unit(Unit.VOLT)), SET_LOWER_VOLTAGE(new Doc().unit(Unit.VOLT)),
+		SET_CHARGE_CURRENT(new Doc().unit(Unit.AMPERE)), 
+		SET_DISCHARGE_CURRENT(new Doc().unit(Unit.AMPERE)),
+		SET_SLOW_CHARGE_VOLTAGE(new Doc().unit(Unit.VOLT)),
+		SET_FLOAT_CHARGE_VOLTAGE(new Doc().unit(Unit.VOLT)),
+		SET_UPPER_VOLTAGE(new Doc().unit(Unit.VOLT)), 
+		SET_LOWER_VOLTAGE(new Doc().unit(Unit.VOLT)),
 		SET_Analog_CHARGE_Energy(new Doc().unit(Unit.KILOWATT_HOURS)),
 		SET_Analog_DISCHARGE_Energy(new Doc().unit(Unit.KILOWATT_HOURS)),
 		SET_Analog_DC_CHARGE_Energy(new Doc().unit(Unit.KILOWATT_HOURS)),
@@ -362,6 +361,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		
 		this.channel(ChannelId.STATE_19).onChange(value -> {
 			this.getGridMode().setNextValue(GridMode.UNDEFINED);
+			@SuppressWarnings("unchecked")
 			Optional<Boolean> v1 = (Optional<Boolean>) value.asOptional();
 			if(!v1.isPresent()) {
 				return;
@@ -420,7 +420,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	}
 
 	public void inverterOff() {
-
+		
 		IntegerWriteChannel SETDATA_ModOffCmd = this.channel(ChannelId.SETDATA_MOD_OFF_CMD);
 		try {
 			SETDATA_ModOffCmd.setNextWriteValue(STOP); // Here: STOP = 1
@@ -510,6 +510,13 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		Optional<Boolean> stateOff = v.getNextValue().asOptional(); 
 		return stateOff.isPresent() && stateOff.get();
 	}
+	
+//	public boolean stateOn() {
+//		StateChannel v = this.channel(ChannelId.Sinexcel_STATE_9);
+//		Optional<Boolean> stateOff = v.getNextValue().asOptional(); 
+//		return stateOff.isPresent() && stateOff.get();
+//	}
+
 
 //------------------------------------------------------------------------------------------------------------------	
 
@@ -517,6 +524,10 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		return new ModbusProtocol(this, //
 //------------------------------------------------------------WRITE-----------------------------------------------------------
 				 
+				new FC6WriteRegisterTask(0x028A,
+						m(EssSinexcel.ChannelId.SETDATA_MOD_ON_CMD, new UnsignedWordElement(0x028A))),
+				new FC6WriteRegisterTask(0x028B,
+						m(EssSinexcel.ChannelId.SETDATA_MOD_OFF_CMD, new UnsignedWordElement(0x028B))),
 
 				new FC6WriteRegisterTask(0x0290,
 						m(EssSinexcel.ChannelId.SET_INTERN_DC_RELAY, new UnsignedWordElement(0x0290))),
@@ -588,8 +599,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 						m(EssSinexcel.ChannelId.Analog_DISCHARGE_Energy, new UnsignedDoublewordElement(0x0080)), // 1
 						new DummyRegisterElement(0x0082, 0x0083),
 						m(EssSinexcel.ChannelId.Temperature, new SignedWordElement(0x0084)), 
-						new DummyRegisterElement(0x0085, 0x0086), new DummyRegisterElement(0x0087, 0x0088),
-						new DummyRegisterElement(0x0089, 0x008A), new DummyRegisterElement(0x008B, 0x008C),
+						new DummyRegisterElement(0x0085, 0x008C), 
 						m(EssSinexcel.ChannelId.DC_Power, new SignedWordElement(0x008D),
 								ElementToChannelConverter.SCALE_FACTOR_1), 
 						new DummyRegisterElement(0x008E, 0x008F),
@@ -602,9 +612,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 						new DummyRegisterElement(0x0249),
 						m(EssSinexcel.ChannelId.Frequency, new SignedWordElement(0x024A),
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_2), 
-						new DummyRegisterElement(0x024B, 0x024C), new DummyRegisterElement(0x024D, 0x024E),
-						new DummyRegisterElement(0x024F, 0x0250), new DummyRegisterElement(0x0251, 0x0252),
-						new DummyRegisterElement(0x0253, 0x0254),
+						new DummyRegisterElement(0x024B, 0x0254), 
 						m(EssSinexcel.ChannelId.DC_Current, new SignedWordElement(0x0255), 
 								ElementToChannelConverter.SCALE_FACTOR_MINUS_1),
 						new DummyRegisterElement(0x0256),
@@ -614,7 +622,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 				new FC3ReadRegistersTask(0x0260, Priority.HIGH,
 						m(EssSinexcel.ChannelId.Sinexcel_State, new UnsignedWordElement(0x0260))),
 
-				new FC3ReadRegistersTask(0x0001, Priority.LOW,
+				new FC3ReadRegistersTask(0x0001, Priority.ONCE,
 						m(EssSinexcel.ChannelId.Model, new StringWordElement(0x0001, 16)),
 						m(EssSinexcel.ChannelId.Serial, new StringWordElement(0x0011, 8))),
 
@@ -626,7 +634,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 //						m(EssSinexcel.ChannelId.Analog_ApparentPower_L3, new SignedWordElement(0x0076), // L3 // kVA // 100
 //								ElementToChannelConverter.SCALE_FACTOR_MINUS_2)),
 
-				new FC3ReadRegistersTask(0x0220, Priority.LOW,
+				new FC3ReadRegistersTask(0x0220, Priority.ONCE,
 //						m(EssSinexcel.ChannelId.Manufacturer, new StringWordElement(0x01F8, 16)), // String // Line109
 //						m(EssSinexcel.ChannelId.Model_2, new StringWordElement(0x0208, 16)), // String (32Char) // line110
 						m(EssSinexcel.ChannelId.Version, new StringWordElement(0x0220, 8))), // String (16Char) //
@@ -871,24 +879,53 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 
 	@Override
 	public void applyPower(int activePower, int reactivePower) {
+		
+		switch (this.InverterState) {
+		case ON:
+			
+			IntegerWriteChannel SET_ACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_ACTIVE);
+			IntegerWriteChannel SET_REACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_REACTIVE);
 
-		IntegerWriteChannel SET_ACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_ACTIVE);
-		IntegerWriteChannel SET_REACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_REACTIVE);
+			int reactiveValue = (int) ((reactivePower / 100));
+			try {
+				SET_REACTIVE_POWER.setNextWriteValue(reactiveValue);
 
-		int reactiveValue = (int) ((reactivePower / 100));
-		try {
-			SET_REACTIVE_POWER.setNextWriteValue(reactiveValue);
+			} catch (OpenemsException e) {
+				log.error("EssSinexcel.applyPower(): Problem occurred while trying so set reactive power" + e.getMessage());
+			}
 
-		} catch (OpenemsException e) {
-			log.error("EssSinexcel.applyPower(): Problem occurred while trying so set reactive power" + e.getMessage());
-		}
+			int activeValue = (int) ((activePower / 100));
+			try {
+				SET_ACTIVE_POWER.setNextWriteValue(activeValue);
 
-		int activeValue = (int) ((activePower / 100));
-		try {
-			SET_ACTIVE_POWER.setNextWriteValue(activeValue);
-
-		} catch (OpenemsException e) {
-			log.error("EssSinexcel.applyPower(): Problem occurred while trying so set active power" + e.getMessage());
+			} catch (OpenemsException e) {
+				log.error("EssSinexcel.applyPower(): Problem occurred while trying so set active power" + e.getMessage());
+			}
+			
+			if(stateOnOff() == false) {
+				a = 1;
+			}
+			
+			if (stateOnOff() == true) {
+				a = 0;
+			}
+			
+			if (activePower == 0 && reactivePower == 0 && a == 0) {
+				inverterOff();
+			}
+			else if((activePower != 0 || reactivePower != 0) && a == 1) {
+				inverterOn();
+			}
+			break;
+			
+		case OFF:
+			if(stateOnOff() == true) {
+				inverterOff();
+			}
+			else {
+				return;
+			}
+			break;
 		}
 	}
 
@@ -908,24 +945,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 			
 			
 			
-			switch (this.InverterState) {
-			case ON:
-				if(!stateOnOff()) {
-					inverterOn();
-				}
-				else {
-					return;
-				}
-				break;
-			case OFF:
-				if(stateOnOff()) {
-					inverterOff();
-				}
-				else {
-					return;
-				}
-				break;
-			}
+			
 			
 
 //			if(island = true) {
