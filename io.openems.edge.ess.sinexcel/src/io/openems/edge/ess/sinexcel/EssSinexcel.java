@@ -41,6 +41,7 @@ import io.openems.edge.common.channel.doc.Level;
 import io.openems.edge.common.channel.doc.Unit;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
+import io.openems.edge.common.sum.GridMode;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.ess.api.ManagedSymmetricEss;
 import io.openems.edge.ess.api.SymmetricEss;
@@ -76,6 +77,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 	private static final int SLOW_CHARGE_VOLTAGE = 4370; // Slow and Float Charge Voltage must be the same for the Lithium Ionbattery.
 	private static final int FLOAT_CHARGE_VOLTAGE = 4370;
 	public int a = 0;
+	public int counter = 0;
 		
 	@Reference
 	protected ConfigurationAdmin cm;
@@ -85,7 +87,7 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 
 	@Activate
 	void activate(ComponentContext context, Config config) {
-		super.activate(context, config.service_pid(), config.id(), config.enabled(), DEFAULT_UNIT_ID, this.cm, "Modbus",
+		super.activate(context, config.id(), config.enabled(), DEFAULT_UNIT_ID, this.cm, "Modbus",
 				config.modbus_id());
 		this.InverterState = config.InverterState();
 		if (OpenemsComponent.updateReferenceFilter(this.cm, config.service_pid(), "battery", config.battery_id())) {
@@ -911,7 +913,12 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 			}
 			
 			if (activePower == 0 && reactivePower == 0 && a == 0) {
-				inverterOff();
+				counter++;
+				if(counter == 10) {
+					inverterOff();
+					counter = 0;
+				}
+				
 			}
 			else if((activePower != 0 || reactivePower != 0) && a == 1) {
 				inverterOn();
