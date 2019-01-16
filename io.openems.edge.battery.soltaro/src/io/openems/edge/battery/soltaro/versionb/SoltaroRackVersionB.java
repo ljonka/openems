@@ -50,7 +50,7 @@ import io.openems.edge.common.taskmanager.Priority;
 		property = EventConstants.EVENT_TOPIC + "=" + EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE //
 )
 public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
-		implements Battery, OpenemsComponent, EventHandler {
+		implements Battery, OpenemsComponent, EventHandler { // JsonApi impl TODO
 
 	// Default values for the battery ranges
 	public static final int DISCHARGE_MIN_V = 696;
@@ -62,6 +62,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 	protected final static int SYSTEM_OFF = 0;
 
 	public static final Integer CAPACITY_KWH = 50;
+	private static final Integer SYSTEM_RESET = 0x1;
 
 	private final Logger log = LoggerFactory.getLogger(SoltaroRackVersionB.class);
 
@@ -100,8 +101,8 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 	}
 
 	private void setWatchdog(int time_seconds) {
-		IntegerWriteChannel c = this.channel(VersionBChannelId.EMS_COMMUNICATION_TIMEOUT);
 		try {
+			IntegerWriteChannel c = this.channel(VersionBChannelId.EMS_COMMUNICATION_TIMEOUT);
 			c.setNextWriteValue(time_seconds);
 		} catch (OpenemsException e) {
 			e.printStackTrace();
@@ -219,6 +220,10 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 		case ON:
 			startSystem();
 			break;
+		case CONFIGURE_SLAVES:
+			configureSlaves();
+			break;
+		
 		}
 	}
 
@@ -233,17 +238,12 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 		log.info("SoltaroRackVersionB.handleStateMachine(): State: " + this.getStateMachineState());
 		boolean readyForWorking = false;
 		switch (this.getStateMachineState()) {
-		case ERROR:
-			//TODO if configuring is needed and the values cannot be read from rack the system goes into errordelay, but the time then is too long....
-			// there must be another delay if no error level 2 is recognized??!
-			if (configuringNeeded()) {
-				setStateMachineState(State.CONFIGURING);
+		case ERROR:			
+				stopSystem();
+				errorDelayIsOver = LocalDateTime.now().plusSeconds(config.errorLevel2Delay());
+				setStateMachineState(State.ERRORDELAY);
 				break;
-			}
-			stopSystem();
-			errorDelayIsOver = LocalDateTime.now().plusSeconds(config.errorLevel2Delay());
-			setStateMachineState(State.ERRORDELAY);
-			break;
+		
 		case ERRORDELAY:
 			if (LocalDateTime.now().isAfter(errorDelayIsOver)) {
 				errorDelayIsOver = null;
@@ -297,60 +297,117 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 			}
 			break;
 		case UNDEFINED:
+			if (isSystemStateUndefined()) { // do nothing until state is clearly defined
+				log.info(" ===>>> STATE is currently undefined! <<<===");
+				break;
+			}
+//			if (this.isConfiguringNeeded() == ConfiguringNecessary.NECESSARY) {
+//				this.setStateMachineState(State.CONFIGURING);
+//			} else 
 			if (this.isError()) {
 				this.setStateMachineState(State.ERROR);
 			} else if (this.isSystemStopped()) {
 				this.setStateMachineState(State.OFF);
 			} else if (this.isSystemIsRunning()) {
 				this.setStateMachineState(State.RUNNING);
-			} else if (this.isSystemStatePending()) {
-				this.setStateMachineState(State.PENDING);
-			}
+			} 
+//			else if (this.isSystemStateUndefined()) {
+//				this.setStateMachineState(State.PENDING);
+//			}
 			break;
-		case PENDING:
-			this.stopSystem();
-			this.setStateMachineState(State.OFF);
-			break;
+//		case PENDING:
+//			if (isSystemStateUndefined()) {
+//				break;
+//			} else {
+//				this.stopSystem();
+//				this.setStateMachineState(State.OFF);
+//				break;
+//			}
 		
-		case CONFIGURING:
-			//
-			configureSlaves();
-			break;
+//		case CONFIGURING:
+//			configureSlaves();
+//			break;
 		}
-		
 		
 		this.getReadyForWorking().setNextValue(readyForWorking);
 	}
 
-	
-	
+	private LocalDateTime timeAfterAutoId = null;
+	private LocalDateTime configuringFinished = null;
+	int DELAY_AUTO_ID_SECONDS = 5;
+	int DELAY_AFTER_CONFIGURING_FINISHED = 5;
 	
 	private void configureSlaves() {
+		if (nextConfiguringProcess == ConfiguringProcess.NONE) {
+			nextConfiguringProcess = ConfiguringProcess.CONFIGURING_STARTED;
+		}
 		
 		switch (nextConfiguringProcess) {
 		case CONFIGURING_STARTED:
+			log.info(" ===> CONFIGURING STARTED: setNumberOfModules() <===");
 			setNumberOfModules();
 			break;
-		case SET_SLAVE_NUMBER:
-			break;
+//		case SET_SLAVE_NUMBER:
+//			break;
 		case SET_ID_AUTO_CONFIGURING:
+			log.info(" ===> SET_ID_AUTO_CONFIGURING: setIdAutoConfiguring() <===");
 			setIdAutoConfiguring();
 			break;
 		case CHECK_ID_AUTO_CONFIGURING:
+			if (timeAfterAutoId != null) {
+				if (timeAfterAutoId.plusSeconds(DELAY_AUTO_ID_SECONDS).isAfter(LocalDateTime.now())) {
+					break;
+				} else {
+					timeAfterAutoId = null;
+				}
+			}
+			log.info(" ===> CHECK_ID_AUTO_CONFIGURING: checkIdAutoConfiguring() <===");
 			checkIdAutoConfiguring();
 			break;		
 		case SET_TEMPERATURE_ID_AUTO_CONFIGURING:
+			log.info(" ===> SET_TEMPERATURE_ID_AUTO_CONFIGURING: setTemperatureIdAutoConfiguring() <===");
 			setTemperatureIdAutoConfiguring();
 			break;
 		case CHECK_TEMPERATURE_ID_AUTO_CONFIGURING:
+			if (timeAfterAutoId != null) {
+				if (timeAfterAutoId.plusSeconds(DELAY_AUTO_ID_SECONDS).isAfter(LocalDateTime.now())) {
+					break;
+				} else {
+					timeAfterAutoId = null;
+				}
+			}
+			log.info(" ===> CHECK_TEMPERATURE_ID_AUTO_CONFIGURING: checkTemperatureIdAutoConfiguring() <===");
 			checkTemperatureIdAutoConfiguring();
 			break;
 		case SET_VOLTAGE_RANGES:
+			log.info(" ===> SET_VOLTAGE_RANGES: setVoltageRanges() <===");
 			setVoltageRanges();
+			
 			break;		
 		case CONFIGURING_FINISHED:
-			log.info("====>>> Configuring successful, hardware restart needed! <<<====");
+			log.info("====>>> Configuring successful! <<<====");
+
+			if (configuringFinished == null) {
+				nextConfiguringProcess = ConfiguringProcess.RESTART_AFTER_SETTING;
+//				this.setStateMachineState(State.OFF);				
+			} else {
+				if (configuringFinished.plusSeconds(DELAY_AFTER_CONFIGURING_FINISHED).isAfter(LocalDateTime.now())) {
+					log.info(">>> Delay time after configuring!");
+				} else {
+					log.info("Delay time after configuring is over, reset system");
+					//Reset System after configuration
+					IntegerWriteChannel resetChannel = this.channel(VersionBChannelId.SYSTEM_RESET);
+					try {
+						resetChannel.setNextWriteValue(SYSTEM_RESET);
+						configuringFinished = null;
+					} catch (OpenemsException e) {
+						log.error("Error while trying to reset the system!");
+					}
+				}
+			}
 			break;
+		case RESTART_AFTER_SETTING:
+			this.startSystem();
 		case NONE:
 			break;
 		}
@@ -386,6 +443,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 			level2LowVoltageChannelRecover.setNextWriteValue(this.config.numberOfSlaves() * ModuleParameters.LEVEL_2_TOTAL_LOW_VOLTAGE_RECOVER_MILLIVOLT.getValue());
 			
 			nextConfiguringProcess = ConfiguringProcess.CONFIGURING_FINISHED;
+			configuringFinished = LocalDateTime.now();
 			
 		} catch (OpenemsException e) {
 			log.error("Setting voltage ranges not successful!");
@@ -401,9 +459,9 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 		}
 		int autoSetTemperatureSlaves = autoSetTemperatureSlavesIdOpt.get();
 		if (autoSetTemperatureSlaves == VersionBEnums.AutoSetFunction.FAILURE.getValue()) {
-			log.error("Auto set temperature slaves id failed!");
+			log.error("Auto set temperature slaves id failed! Start configuring process again!");
 			//Auto set failed, try again
-			nextConfiguringProcess = ConfiguringProcess.SET_TEMPERATURE_ID_AUTO_CONFIGURING;
+			nextConfiguringProcess = ConfiguringProcess.CONFIGURING_STARTED;
 		} else if (autoSetTemperatureSlaves == VersionBEnums.AutoSetFunction.SUCCES.getValue()) {
 			log.info("Auto set temperature slaves id succeeded!");
 			nextConfiguringProcess = ConfiguringProcess.SET_VOLTAGE_RANGES;
@@ -416,6 +474,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 		IntegerWriteChannel autoSetSlavesTemperatureIdChannel = this.channel(VersionBChannelId.AUTO_SET_SLAVES_TEMPERATURE_ID);
 		try {
 			autoSetSlavesTemperatureIdChannel.setNextWriteValue(AutoSetFunction.START_AUTO_SETTING.getValue());
+			timeAfterAutoId = LocalDateTime.now();
 			nextConfiguringProcess = ConfiguringProcess.CHECK_TEMPERATURE_ID_AUTO_CONFIGURING;
 		} catch (OpenemsException e) {
 			log.error("Setting temperature id auto set not successful"); //Set was not successful, it will be tried until it succeeded 
@@ -430,9 +489,9 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 		}
 		int autoSetSlaves = autoSetSlavesIdOpt.get();
 		if (autoSetSlaves == VersionBEnums.AutoSetFunction.FAILURE.getValue()) {
-			log.error("Auto set slaves id failed!");
+			log.error("Auto set slaves id failed! Start configuring process again!");
 			//Auto set failed, try again
-			nextConfiguringProcess = ConfiguringProcess.SET_ID_AUTO_CONFIGURING;
+			nextConfiguringProcess = ConfiguringProcess.CONFIGURING_STARTED;
 		} else if (autoSetSlaves == VersionBEnums.AutoSetFunction.SUCCES.getValue()) {
 			log.info("Auto set slaves id succeeded!");
 			nextConfiguringProcess = ConfiguringProcess.SET_TEMPERATURE_ID_AUTO_CONFIGURING;
@@ -444,6 +503,7 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 				IntegerWriteChannel autoSetSlavesIdChannel = this.channel(VersionBChannelId.AUTO_SET_SLAVES_ID);
 				try {
 					autoSetSlavesIdChannel.setNextWriteValue(AutoSetFunction.START_AUTO_SETTING.getValue());
+					timeAfterAutoId = LocalDateTime.now();
 					nextConfiguringProcess = ConfiguringProcess.CHECK_ID_AUTO_CONFIGURING;
 				} catch (OpenemsException e) {
 					log.error("Setting slave numbers not successful"); //Set was not successful, it will be tried until it succeeded 
@@ -455,54 +515,102 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 		IntegerWriteChannel numberOfSlavesChannel = this.channel(VersionBChannelId.WORK_PARAMETER_PCS_COMMUNICATION_RATE);
 		try {
 			numberOfSlavesChannel.setNextWriteValue(this.config.numberOfSlaves());
-			nextConfiguringProcess = ConfiguringProcess.SET_SLAVE_NUMBER;
+			nextConfiguringProcess = ConfiguringProcess.SET_ID_AUTO_CONFIGURING;
 		} catch (OpenemsException e) {
 			log.error("Setting slave numbers not successful"); //Set was not successful, it will be tried until it succeeded 
 		}
 	}
 	
-	
+	private enum ConfiguringNecessary {
+		UNDEFINED,
+		NECESSARY,
+		NOT_NECESSARY
+	}
 	
 	private enum ConfiguringProcess {
 		NONE,
 		CONFIGURING_STARTED,
-		SET_SLAVE_NUMBER,
+//		SET_SLAVE_NUMBER,
 		SET_ID_AUTO_CONFIGURING,
 
 		CHECK_ID_AUTO_CONFIGURING,
 		SET_TEMPERATURE_ID_AUTO_CONFIGURING,
 		CHECK_TEMPERATURE_ID_AUTO_CONFIGURING,
 		SET_VOLTAGE_RANGES,
-		CONFIGURING_FINISHED
+		CONFIGURING_FINISHED, RESTART_AFTER_SETTING
 	}
 
-	private boolean configuringNeeded() {
+	private ConfiguringNecessary isConfiguringNeeded() { //TODO Check if correct! ==> conf is needed when module numbers differ and/or slave comm errors are present
 		@SuppressWarnings("unchecked")
 		Optional<Integer> numberOfSlavesOpt = (Optional<Integer>) this.channel(VersionBChannelId.WORK_PARAMETER_PCS_COMMUNICATION_RATE).value().asOptional();
 		if (! numberOfSlavesOpt.isPresent()) {
-			return false;
+			return ConfiguringNecessary.UNDEFINED;
 		}
 		
 		int numberOfModules = numberOfSlavesOpt.get();
 		if (numberOfModules != this.config.numberOfSlaves()) {
-			return true;
+			return ConfiguringNecessary.NECESSARY;
 		}
 		
-		@SuppressWarnings("unchecked")
-		Optional<Integer> systemVoltageVoltOpt = (Optional<Integer>) this.channel(VersionBChannelId.CLUSTER_1_VOLTAGE).value().asOptional();
-		if (!systemVoltageVoltOpt.isPresent()) {
-			return false;
-		}
-		int systemVoltageVolt = systemVoltageVoltOpt.get();
-		int lowerRange = this.config.numberOfSlaves() * ModuleParameters.MIN_VOLTAGE_VOLT.getValue();
-		int upperRange = this.config.numberOfSlaves() * ModuleParameters.MAX_VOLTAGE_VOLT.getValue();
-		boolean voltageCorrect = lowerRange <= systemVoltageVolt && systemVoltageVolt <= upperRange; 
+//		@SuppressWarnings("unchecked")
+//		Optional<Integer> systemVoltageVoltOpt = (Optional<Integer>) this.channel(VersionBChannelId.CLUSTER_1_VOLTAGE).value().asOptional();
+//		if (!systemVoltageVoltOpt.isPresent()) {
+//			return ConfiguringNecessary.UNDEFINED;
+//		}
+//		int systemVoltageVolt = systemVoltageVoltOpt.get();
+//		int lowerRange = this.config.numberOfSlaves() * ModuleParameters.MIN_VOLTAGE_VOLT.getValue();
+//		int upperRange = this.config.numberOfSlaves() * ModuleParameters.MAX_VOLTAGE_VOLT.getValue();
+//		boolean voltageCorrect = lowerRange <= systemVoltageVolt && systemVoltageVolt <= upperRange; 
 		
-		return !voltageCorrect && isSlaveCommunicationError();
+		if (! isSlaveCommunicationErrorValuesPresent() ) {
+			return ConfiguringNecessary.UNDEFINED;
+		}
+		
+//		if (!voltageCorrect || isSlaveCommunicationError()) {
+//			return ConfiguringNecessary.NECESSARY;
+//		};
+		if (isSlaveCommunicationError()) {
+			return ConfiguringNecessary.NECESSARY;
+		};
+		return ConfiguringNecessary.NOT_NECESSARY;
 	}
 
-	private boolean isSystemStatePending() { // System is pending if it is definitely not started and not stopped
-		return !isSystemIsRunning() && !isSystemStopped();
+	private boolean isSlaveCommunicationErrorValuesPresent() {
+		VersionBChannelId[] channelIds = { 
+				VersionBChannelId.SLAVE_20_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_19_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_18_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_17_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_16_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_15_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_14_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_13_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_12_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_11_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_10_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_9_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_8_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_7_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_6_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_5_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_4_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_3_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_2_COMMUNICATION_ERROR,
+				VersionBChannelId.SLAVE_1_COMMUNICATION_ERROR
+		};
+		for (VersionBChannelId id : channelIds) {
+			StateChannel r = this.channel(id);
+			Optional<Boolean> bOpt = r.value().asOptional();
+			if (!bOpt.isPresent()) {
+				return false;
+			}
+		}
+			
+		return true;
+	}
+
+	private boolean isSystemStateUndefined() { // System is undefined if it is definitely not started and not stopped, and it is unknown if configuring is necessary
+		return (isConfiguringNeeded() == ConfiguringNecessary.UNDEFINED) ||  (!isSystemIsRunning() && !isSystemStopped());
 	}
 
 	private boolean isSystemIsRunning() {
@@ -669,6 +777,19 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 				),
 				// Sleep
 				new FC6WriteRegisterTask(0x201D, m(VersionBChannelId.SLEEP, new UnsignedWordElement(0x201D)) //
+				),
+				
+				// Work parameter
+				new FC6WriteRegisterTask(0x20C1,
+						m(VersionBChannelId.WORK_PARAMETER_PCS_COMMUNICATION_RATE, new UnsignedWordElement(0x20C1)) //
+				),
+				
+				//Paramaeters for configuring
+				new FC6WriteRegisterTask(0x2014, 
+					m(VersionBChannelId.AUTO_SET_SLAVES_ID, new UnsignedWordElement(0x2014))
+				),
+				new FC6WriteRegisterTask(0x2019, 
+					m(VersionBChannelId.AUTO_SET_SLAVES_TEMPERATURE_ID, new UnsignedWordElement(0x2019))
 				),
 
 				// Stop parameter
@@ -1007,7 +1128,6 @@ public class SoltaroRackVersionB extends AbstractOpenemsModbusComponent
 								new UnsignedWordElement(0x20A2)) //
 				),
 
-				// Work parameter
 				new FC3ReadRegistersTask(0x20C0, Priority.LOW,
 						m(VersionBChannelId.WORK_PARAMETER_PCS_MODBUS_ADDRESS, new UnsignedWordElement(0x20C0)), //
 						m(VersionBChannelId.WORK_PARAMETER_PCS_COMMUNICATION_RATE, new UnsignedWordElement(0x20C1)), //

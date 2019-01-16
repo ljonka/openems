@@ -144,8 +144,8 @@ public class VersionBEnums {
 	
 	public enum AutoSetFunction implements OptionsEnum {
 
-		INIT_MODE(0x1, "Init mode"), 
-		START_AUTO_SETTING(0x2, "Start auto setting"),
+		INIT_MODE(0x0, "Init mode"), 
+		START_AUTO_SETTING(0x1, "Start auto setting"),
 		SUCCES(0x2, "Success"),
 		FAILURE(0x3, "Failure");
 

@@ -4,6 +4,6 @@ public enum BatteryState {
 	
 	DEFAULT,
 	ON,
-	OFF
-
+	OFF,
+	CONFIGURE_SLAVES
 }
