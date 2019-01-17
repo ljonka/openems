@@ -540,10 +540,9 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 						m(EssSinexcel.ChannelId.SETDATA_GRID_OFF_CMD, new UnsignedWordElement(0x028E))), // Stop SETDATA_GridOffCmd
 
 				new FC6WriteRegisterTask(0x0087,
-						m(EssSinexcel.ChannelId.SET_CHARGE_DISCHARGE_ACTIVE, new SignedWordElement(0x0087))),
-
+						m(ManagedSymmetricEss.ChannelId.SET_ACTIVE_POWER_EQUALS, new SignedWordElement(0x0087))),
 				new FC6WriteRegisterTask(0x0088,
-						m(EssSinexcel.ChannelId.SET_CHARGE_DISCHARGE_REACTIVE, new SignedWordElement(0x0088))), 
+						m(ManagedSymmetricEss.ChannelId.SET_REACTIVE_POWER_EQUALS, new SignedWordElement(0x0088))), 
 
 				new FC6WriteRegisterTask(0x032B,
 						m(EssSinexcel.ChannelId.CHA_MAX_A, new UnsignedWordElement(0x032B))), //
@@ -885,8 +884,8 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 		switch (this.InverterState) {
 		case ON:
 			
-			IntegerWriteChannel SET_ACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_ACTIVE);
-			IntegerWriteChannel SET_REACTIVE_POWER = this.channel(ChannelId.SET_CHARGE_DISCHARGE_REACTIVE);
+			IntegerWriteChannel SET_ACTIVE_POWER = this.channel(ManagedSymmetricEss.ChannelId.SET_ACTIVE_POWER_EQUALS);
+			IntegerWriteChannel SET_REACTIVE_POWER = this.channel(ManagedSymmetricEss.ChannelId.SET_REACTIVE_POWER_EQUALS);
 
 			int reactiveValue = (int) ((reactivePower / 100));
 			try {
@@ -949,12 +948,6 @@ public class EssSinexcel extends AbstractOpenemsModbusComponent
 			setBatteryRanges();
 			doHandlingSlowFloatVoltage();
 			
-			
-			
-			
-			
-			
-
 //			if(island = true) {
 //				islandingOn();
 //			}
