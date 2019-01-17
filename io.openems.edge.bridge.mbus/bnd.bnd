@@ -1,0 +1,35 @@
+#
+# io.openems.edge.bridge.mbus PROVIDER BUNDLE
+#
+Bundle-Name: OpenEMS Edge Bridge Mbus
+Bundle-Vendor: Consolinno Energy GmbH
+Bundle-License: https://opensource.org/licenses/EPL-2.0
+Bundle-Version:					1.0.0.${tstamp}
+Bundle-Description: \
+	The provider bundle for io.openems.edge.bridge.mbus.
+
+Export-Package: \
+	io.openems.edge.bridge.mbus.api,\
+	io.openems.edge.bridge.mbus.api.task,\
+	io.openems.edge.bridge.mbus
+
+-includeresource: {readme.md}
+
+-buildpath: \
+	osgi.enroute.base.api;version=2.1,\
+	io.openems.edge.common;version=latest,\
+	com.google.gson,\
+	com.google.guava,\
+	io.openems.common;version=latest,\
+	org.openmuc.jmbus	
+
+-testpath: \
+	osgi.enroute.junit.wrapper;version=4.12, \
+	osgi.enroute.hamcrest.wrapper;version=1.3
+
+-runrequires: bnd.identity;id='org.openmuc.jmbus'
+-runbundles: \
+	org.apache.felix.log;version='[1.0.1,1.0.2)',\
+	org.openmuc.jmbus;version='[3.2.0,3.2.1)',\
+	org.openmuc.jrxtx;version='[1.0.1,1.0.2)'
+-resolve: auto
