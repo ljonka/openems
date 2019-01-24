@@ -8,6 +8,7 @@ import java.util.stream.Stream;
 
 import org.openmuc.jmbus.MBusConnection;
 import org.openmuc.jmbus.MBusConnection.MBusSerialBuilder;
+import org.openmuc.jmbus.VariableDataStructure;
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
@@ -129,7 +130,8 @@ public class BridgeMbusSerialImpl extends AbstractOpenemsComponent
 			try (MBusConnection mBusConnection = _builder.build()) {
 				for (MbusTask task : tasks.values()) {
 					int primaryAddress = task.getPrimaryAddress();
-					mBusConnection.read(primaryAddress);
+					VariableDataStructure data = mBusConnection.read(primaryAddress);
+					System.out.println(data.toString());
 				}
 
 				mBusConnection.close();
