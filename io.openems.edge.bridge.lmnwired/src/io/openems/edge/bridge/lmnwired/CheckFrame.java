@@ -153,7 +153,7 @@ public class CheckFrame implements TimerStopEvent {
 				System.out.println("Empfangene Payload binär: " + frame[6]);
 				System.out.println("Empfangene Payload Ascii: " + util.convertToAscii(frame[6]));
 				CheckFrame checkframe = new CheckFrame();
-//				checkframe.addListener(main);
+				checkframe.addListener((EndOfDataRequest) main);
 				checkframe.Event_DataEnd();
 //			}
 			break;

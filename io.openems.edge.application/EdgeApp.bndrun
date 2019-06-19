@@ -86,7 +86,6 @@
 	bnd.identity;id='io.openems.edge.scheduler.fixedorder',\
 	bnd.identity;id='io.openems.edge.simulator',\
 	bnd.identity;id='io.openems.edge.timedata.influxdb',\
-	bnd.identity;version='2.2.27';id='org.gurux:gurux.dlms',\
 	bnd.identity;id='io.openems.edge.bridge.lmnwired'
 
 -runbundles: \

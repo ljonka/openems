@@ -53,16 +53,17 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 	private final LMNWiredWorker worker = new LMNWiredWorker();
 	private final Map<String, LMNWiredTask> tasks = new HashMap<>();
-	
-	private List<TimerStartEvent> listeners1 = new ArrayList<TimerStartEvent>();
+
+	private static List<TimerStartEvent> listeners1 = new ArrayList<TimerStartEvent>();
 
 	protected int registeredDevices = 0;
 
-	private String messageType;
+	private static String messageType;
+	private static BridgeLMNWiredImpl bridgeLMNWiredImpl = new BridgeLMNWiredImpl();
 
-	private int timeslots = 32;
+	private static int timeslots = 32;
 	private static int timeslotLength = 10; // Später zu 5 ändern
-	
+
 	private static long time = 0;
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
@@ -115,8 +116,11 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 				log.info("Sende Broadcast Adressvergabe");
 
 				// Noch kein Teilnehmer vorhanden
-
-				// Mindestens 1 Teilnehmer vorhanden
+				if (registeredDevices <= 0) {
+					BroadcastAddressRequest1();
+				} else { // Mindestens 1 Teilnehmer vorhanden
+					BroadcastAddressRequest2();
+				}
 
 			}
 
@@ -143,18 +147,12 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		service.scheduleAtFixedRate(runnableCheckDevicePresence, 0, 30, TimeUnit.SECONDS);
 	}
 
-	protected void BroadcastAddressCheck() {
-		Frame frame1 = new Frame("AddressCheckB", timeslots, "", (pm.getPayloadBroadcast(sm)).toString());
-		messageType = "check";
-		PortManager.setPortData(frame1.getFrameTyp2());
-		Event1_Timer();
-	}
-
 	@Deactivate
 	protected void deactivate() {
 		super.deactivate();
 		comPort.closePort();
-		this.worker.deactivate();
+		worker.deactivate();
+		service.shutdown();
 	}
 
 	@Override
@@ -220,7 +218,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 	public long getTime() {
 		return time;
 	}
-	
+
 	public void Event1_Timer() {
 		time = System.currentTimeMillis();
 
@@ -229,9 +227,34 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 			break;
 		}
 	}
-	
+
 	public int getTimeslotLength() {
 		return timeslotLength;
+	}
+
+	// Broadcast zur Adressvergabe, noch kein Teilnehmer vorhanden
+	public static void BroadcastAddressRequest1() {
+		System.out.println("\n---0s: Broadcast Adressvergabe (0 Teilnehmer):");
+		messageType = "request";
+		Frame frame1 = new Frame("AddressRequest1", timeslots, "", "");
+		PortManager.setPortData(frame1.getFrameTyp1());
+		bridgeLMNWiredImpl.Event1_Timer();
+	}
+
+	// Broadcast zur Adressvergabe, mindestens 1 Teilnehmer vorhanden
+	public static void BroadcastAddressRequest2() {
+		System.out.println("\n---30s: Broadcast Adressvergabe (mehr als 0 Teilnehmer):");
+		Frame frame1 = new Frame("AddressRequest2", timeslots, "", (pm.getPayloadBroadcast(sm)).toString());
+		messageType = "request";
+		PortManager.setPortData(frame1.getFrameTyp2());
+		bridgeLMNWiredImpl.Event1_Timer();
+	}
+	
+	public static void BroadcastAddressCheck() {
+		Frame frame1 = new Frame("AddressCheckB", timeslots, "", (pm.getPayloadBroadcast(sm)).toString());
+		messageType = "check";
+		PortManager.setPortData(frame1.getFrameTyp2());
+		bridgeLMNWiredImpl.Event1_Timer();
 	}
 
 }
