@@ -1,0 +1,30 @@
+#
+# io.openems.edge.bridge.lmnwired PROVIDER BUNDLE
+#
+
+Bundle-Version:					1.0.0.${tstamp}
+Bundle-Description: Bridge Implementation for metering data exchange
+
+Export-Package: \
+	io.openems.edge.bridge.lmnwired.api,\
+	io.openems.edge.bridge.lmnwired.api.task,\
+	io.openems.edge.bridge.lmnwired
+
+
+-includeresource: {readme.md}
+
+-buildpath: \
+	osgi.enroute.base.api;version=2.1,\
+	org.gurux:gurux.dlms,\
+	com.fazecast.jSerialComm,\
+	io.openems.edge.common,\
+	io.openems.common
+
+-testpath: \
+	osgi.enroute.junit.wrapper;version=4.12, \
+	osgi.enroute.hamcrest.wrapper;version=1.3
+
+Bundle-Name: LMN Wired Bridge
+-runrequires: \
+	bnd.identity;version='2.2.27';id='org.gurux:gurux.dlms',\
+	bnd.identity;version='2.5.1';id='com.fazecast.jSerialComm'
