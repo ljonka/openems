@@ -1,7 +1,5 @@
 package io.openems.backend.metadata.dummy;
 
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -22,9 +20,6 @@ import io.openems.backend.metadata.api.BackendUser;
 import io.openems.backend.metadata.api.Edge;
 import io.openems.backend.metadata.api.Edge.State;
 import io.openems.backend.metadata.api.Metadata;
-import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
-import io.openems.common.exceptions.OpenemsException;
-import io.openems.common.session.Role;
 import io.openems.common.types.EdgeConfig;
 import io.openems.common.types.EdgeConfigDiff;
 import io.openems.common.utils.StringUtils;
@@ -55,28 +50,6 @@ public class Dummy extends AbstractOpenemsBackendComponent implements Metadata {
 	@Deactivate
 	void deactivate() {
 		this.logInfo(this.log, "Deactivate");
-	}
-
-	@Override
-	public BackendUser authenticate() throws OpenemsException {
-		int id = this.nextUserId.incrementAndGet();
-		String userId = "user" + id;
-		BackendUser user = new BackendUser(userId, "User #" + id);
-		for (String edgeId : this.edges.keySet()) {
-			user.addEdgeRole(edgeId, Role.ADMIN);
-		}
-		this.users.put(userId, user);
-		return user;
-	}
-
-	@Override
-	public BackendUser authenticate(String username, String password) throws OpenemsNamedException {
-		return this.authenticate();
-	}
-
-	@Override
-	public BackendUser authenticate(String sessionId) throws OpenemsException {
-		return this.authenticate();
 	}
 
 	@Override
@@ -131,16 +104,6 @@ public class Dummy extends AbstractOpenemsBackendComponent implements Metadata {
 	public Optional<Edge> getEdge(String edgeId) {
 		Edge edge = this.edges.get(edgeId);
 		return Optional.ofNullable(edge);
-	}
-
-	@Override
-	public Optional<BackendUser> getUser(String userId) {
-		return Optional.ofNullable(this.users.get(userId));
-	}
-
-	@Override
-	public Collection<Edge> getAllEdges() {
-		return Collections.unmodifiableCollection(this.edges.values());
 	}
 
 	public static Optional<Integer> parseNumberFromName(String name) {

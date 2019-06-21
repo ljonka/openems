@@ -10,13 +10,16 @@ import io.openems.common.types.ChannelAddress;
 import io.openems.common.types.EdgeConfig;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.channel.Doc;
+import org.slf4j.Logger;
 
 /**
  * A Service that provides access to OpenEMS-Components.
  */
 public interface ComponentManager extends OpenemsComponent {
 
-	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
+	// TODO extend interface with roles and stuff
+
+	enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		CONFIG_NOT_ACTIVATED(Doc.of(Level.WARNING) //
 				.text("A configured OpenEMS Component was not activated"));
 
@@ -33,22 +36,22 @@ public interface ComponentManager extends OpenemsComponent {
 
 	/**
 	 * Gets all enabled OpenEMS-Components.
-	 * 
+	 *
 	 * @return a List of OpenEMS-Components
 	 * @throws IllegalArgumentException if the Component was not found
 	 */
-	public List<OpenemsComponent> getComponents();
+	List<OpenemsComponent> getComponents();
 
 	/**
 	 * Gets a OpenEMS-Component by its Component-ID.
-	 * 
+	 *
 	 * @param componentId the Component-ID (e.g. "_sum")
 	 * @param <T>         the typed Component
 	 * @return the OpenEMS-Component
 	 * @throws OpenemsNamedException if the Component was not found
 	 */
 	@SuppressWarnings("unchecked")
-	public default <T extends OpenemsComponent> T getComponent(String componentId) throws OpenemsNamedException {
+	default <T extends OpenemsComponent> T getComponent(String componentId) throws OpenemsNamedException {
 		if (componentId == OpenemsConstants.COMPONENT_MANAGER_ID) {
 			return (T) this;
 		}
@@ -63,14 +66,14 @@ public interface ComponentManager extends OpenemsComponent {
 
 	/**
 	 * Gets a Channel by its Channel-Address.
-	 * 
+	 *
 	 * @param channelAddress the Channel-Address
 	 * @param <T>            the typed Channel
 	 * @return the Channel
 	 * @throws IllegalArgumentException if the Channel is not available
 	 * @throws OpenemsNamedException    on error
 	 */
-	public default <T extends Channel<?>> T getChannel(ChannelAddress channelAddress)
+	default <T extends Channel<?>> T getChannel(ChannelAddress channelAddress)
 			throws IllegalArgumentException, OpenemsNamedException {
 		OpenemsComponent component = this.getComponent(channelAddress.getComponentId());
 		return component.channel(channelAddress.getChannelId());
@@ -78,9 +81,22 @@ public interface ComponentManager extends OpenemsComponent {
 
 	/**
 	 * Gets the complete configuration of this OpenEMS Edge.
-	 * 
+	 *
 	 * @return the EdgeConfig object
 	 */
-	public EdgeConfig getEdgeConfig();
+	EdgeConfig getEdgeConfig();
 
+	/**
+	 * Checks whether the corresponding component to the given information is activated
+	 * @param componentId
+	 * @param pid
+	 * @return
+	 */
+	boolean isComponentActivated(String componentId, String pid);
+
+	void logWarn(Logger log, String s);
+
+	void logError(Logger log, String message);
+
+	List<String> checkForNotActivatedComponents();
 }

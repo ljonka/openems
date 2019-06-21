@@ -9,14 +9,15 @@ import java.util.concurrent.TimeoutException;
 import io.openems.backend.metadata.api.BackendUser;
 import io.openems.common.exceptions.OpenemsError;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
+import io.openems.common.websocket.SubscribedChannelsWorker;
 
 public class WsData extends io.openems.common.websocket.WsData {
 
-	private final SubscribedEdgesChannelsWorker worker;
+	private final SubscribedChannelsWorker worker;
 	private CompletableFuture<BackendUser> user = new CompletableFuture<BackendUser>();
 
 	public WsData(B2bWebsocket parent) {
-		this.worker = new SubscribedEdgesChannelsWorker(parent, this);
+		this.worker = new SubscribedChannelsWorkerMultipleEdges(parent, this);
 	}
 
 	@Override
@@ -51,7 +52,7 @@ public class WsData extends io.openems.common.websocket.WsData {
 	 * 
 	 * @return the SubscribedChannelsWorker
 	 */
-	public SubscribedEdgesChannelsWorker getSubscribedChannelsWorker() {
+	public SubscribedChannelsWorker getSubscribedChannelsWorker() {
 		return this.worker;
 	}
 

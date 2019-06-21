@@ -1,11 +1,6 @@
 package io.openems.backend.metadata.file;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +8,7 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import io.openems.common.utils.FileUtils;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
@@ -30,7 +26,6 @@ import io.openems.backend.metadata.api.Edge.State;
 import io.openems.backend.metadata.api.Metadata;
 import io.openems.backend.metadata.api.BackendUser;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
-import io.openems.common.exceptions.OpenemsException;
 import io.openems.common.session.Role;
 import io.openems.common.types.EdgeConfig;
 import io.openems.common.utils.JsonUtils;
@@ -86,21 +81,6 @@ public class File extends AbstractOpenemsBackendComponent implements Metadata {
 	}
 
 	@Override
-	public BackendUser authenticate() throws OpenemsException {
-		return this.user;
-	}
-
-	@Override
-	public BackendUser authenticate(String username, String password) throws OpenemsNamedException {
-		return this.authenticate();
-	}
-
-	@Override
-	public BackendUser authenticate(String sessionId) throws OpenemsException {
-		return this.authenticate();
-	}
-
-	@Override
 	public synchronized Optional<String> getEdgeIdForApikey(String apikey) {
 		this.refreshData();
 		for (Entry<String, Edge> entry : this.edges.entrySet()) {
@@ -119,32 +99,10 @@ public class File extends AbstractOpenemsBackendComponent implements Metadata {
 		return Optional.ofNullable(edge);
 	}
 
-	@Override
-	public Optional<BackendUser> getUser(String userId) {
-		return Optional.of(this.user);
-	}
-
-	@Override
-	public synchronized Collection<Edge> getAllEdges() {
-		this.refreshData();
-		return Collections.unmodifiableCollection(this.edges.values());
-	}
-
 	private synchronized void refreshData() {
 		if (this.edges.isEmpty()) {
 			// read file
-			StringBuilder sb = new StringBuilder();
-			String line = null;
-			try (BufferedReader br = new BufferedReader(new FileReader(this.path))) {
-				while ((line = br.readLine()) != null) {
-					sb.append(line);
-				}
-			} catch (IOException e) {
-				this.logWarn(this.log, "Unable to read file [" + this.path + "]: " + e.getMessage());
-				e.printStackTrace();
-				return;
-			}
-
+			StringBuilder sb = FileUtils.checkAndGetFileContent(this.path);
 			List<Edge> edges = new ArrayList<>();
 
 			// parse to JSON
