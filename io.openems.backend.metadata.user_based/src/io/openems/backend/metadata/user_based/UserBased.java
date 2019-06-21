@@ -1,37 +1,39 @@
 package io.openems.backend.metadata.user_based;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import io.openems.backend.common.component.AbstractOpenemsBackendComponent;
-import io.openems.common.channel.Level;
-import io.openems.common.utils.FileUtils;
-import io.openems.backend.metadata.api.BackendUser;
-import io.openems.backend.metadata.api.Edge;
-import io.openems.backend.metadata.api.Edge.State;
-import io.openems.backend.metadata.api.IntersectChannels;
-import io.openems.backend.metadata.api.Metadata;
-import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
-import io.openems.common.exceptions.OpenemsException;
-import io.openems.common.types.ChannelAddress;
-import io.openems.common.types.EdgeConfig;
-import io.openems.common.utils.JsonKeys;
-import io.openems.common.utils.JsonUtils;
-import org.osgi.service.component.annotations.*;
-import org.osgi.service.metatype.annotations.Designate;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.metatype.annotations.Designate;
+import org.osgi.service.component.annotations.ConfigurationPolicy;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Deactivate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+
+import io.openems.backend.common.component.AbstractOpenemsBackendComponent;
+import io.openems.backend.metadata.api.BackendUser;
+import io.openems.backend.metadata.api.Edge;
+import io.openems.backend.metadata.api.Edge.State;
+import io.openems.backend.metadata.api.Metadata;
+import io.openems.common.channel.Level;
+import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
+import io.openems.common.types.EdgeConfig;
+import io.openems.common.utils.FileUtils;
+import io.openems.common.utils.JsonKeys;
+import io.openems.common.utils.JsonUtils;
 
 /**
  * TODO Fill the comment as soon as the logic works
  */
 @Designate(ocd = Config.class, factory = false)
 @Component(name = "Metadata.UserBased", configurationPolicy = ConfigurationPolicy.REQUIRE)
-public class UserBased extends AbstractOpenemsBackendComponent implements Metadata, IntersectChannels {
+public class UserBased extends AbstractOpenemsBackendComponent implements Metadata {
 
     private final Logger log = LoggerFactory.getLogger(UserBased.class);
     private final Map<String, BackendUser> sessionIdUserMap = new HashMap<>();
@@ -75,20 +77,6 @@ public class UserBased extends AbstractOpenemsBackendComponent implements Metada
         this.refreshData();
         Edge edge = this.edges.get(edgeId);
         return Optional.ofNullable(edge);
-    }
-
-    /**
-     * This method checks whether the requested channels are available for the user with the given user id
-     * @param userId the requesting user
-     * @param edgeId the id of the edge of the channels
-     * @param requestedChannels the requested channels
-     * @return all permitted channels
-     * @throws OpenemsException gets thrown in case the user is not permitted of accessing the edge
-     */
-    @Override
-    public TreeSet<ChannelAddress> checkChannels(String userId, String edgeId, TreeSet<ChannelAddress> requestedChannels) throws OpenemsException {
-        // TODO remove
-        return requestedChannels;
     }
 
     /**
