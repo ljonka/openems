@@ -43,7 +43,8 @@ public class Addressing {
 					log.info(testRequestDevicesOnZero);
 					serialPort.writeBytes(hdlcFrameAddressingOnEmptyList.getBytes(),
 								hdlcFrameAddressingOnEmptyList.getLength());
-					timeStampAddressingOnEmptyList = System.nanoTime();
+					updateTimeStampAddressingOnEmptyList();
+					log.info("timeStampAddressingOnEmptyList after data send: " + timeStampAddressingOnEmptyList);
 				} else { // Mindestens 1 Teilnehmer vorhanden
 					log.info(testRequestDevicesWithExisting);
 //					serialPort.writeBytes(testRequestDevicesWithExisting.getBytes(),
@@ -71,8 +72,17 @@ public class Addressing {
 
 		service = Executors.newSingleThreadScheduledExecutor();
 
-		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 30, TimeUnit.SECONDS);
+		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 5, TimeUnit.SECONDS);
 		service.scheduleAtFixedRate(runnableCheckDevicePresence, 15, 30, TimeUnit.SECONDS);
+	}
+	
+	public long getTimeStampAddressingOnEmptyList() {
+		return timeStampAddressingOnEmptyList;
+	}
+	
+	public long updateTimeStampAddressingOnEmptyList() {
+		timeStampAddressingOnEmptyList = System.nanoTime();
+		return timeStampAddressingOnEmptyList;
 	}
 
 	public void shutdown() {

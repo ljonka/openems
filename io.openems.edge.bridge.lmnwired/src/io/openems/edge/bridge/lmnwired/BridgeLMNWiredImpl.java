@@ -46,7 +46,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 	private final LMNWiredWorker worker = new LMNWiredWorker();
 	private final Map<String, LMNWiredTask> tasks = new HashMap<>();
-	
+
 	private Addressing addressing;
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
@@ -87,7 +87,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		serialPort.openPort();
 
 		activateSerialDataListener(serialPort);
-		
+
 		addressing = new Addressing(serialPort);
 
 	}
@@ -163,6 +163,9 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 				for (int i = 0; i < newData.length; ++i)
 					System.out.print((char) newData[i]);
 				System.out.println("\n");
+				addressing.updateTimeStampAddressingOnEmptyList();
+				log.info("timeStampAddressingOnEmptyList after data received: "
+						+ addressing.getTimeStampAddressingOnEmptyList());
 			}
 		});
 	}
