@@ -21,7 +21,7 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	String portName() default "/dev/ttyUSB0";
 
 	@AttributeDefinition(name = "Baudrate", description = "The baudrate - e.g. 9600, 19200, 38400, 57600 or 115200")
-	int baudRate() default 650000;
+	int baudRate() default 460800;
 
 	String webconsole_configurationFactory_nameHint() default "Bridge LMN wired [{id}]";
 }
