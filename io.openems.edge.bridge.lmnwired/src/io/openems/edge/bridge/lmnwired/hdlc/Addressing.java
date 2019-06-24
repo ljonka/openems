@@ -24,15 +24,21 @@ public class Addressing {
 	private String testRequestDevicesOnZero = "Request device registration with zero devices in list.";
 	private String testRequestDevicesWithExisting = "Request device registration with devices in list.";
 	private String testRequestDevicePresenceCheck = "Request device presence checkup.";
-	private HdlcFrameAddressingOnEmptyList hdlcFrameAddressingOnEmptyList = new HdlcFrameAddressingOnEmptyList();
+	private HdlcFrameAddressingOnEmptyList hdlcFrameAddressingOnEmptyList;
 	protected long timeStampAddressingOnEmptyList; 
 
 	/**
 	 * 
 	 * @param serialPort
 	 */
-	public Addressing(SerialPort serialPort) {
-		this.serialPort = serialPort;		
+	public Addressing(SerialPort serialPort, int timeSlots) {
+		this.serialPort = serialPort;
+		hdlcFrameAddressingOnEmptyList = new HdlcFrameAddressingOnEmptyList((byte)timeSlots);
+		
+		if(!serialPort.isOpen()) {
+			log.info("SerialPort not open.");
+			return;
+		}
 
 		// Lookup new devices
 		Runnable runnableInviteNewDevices = new Runnable() {
@@ -43,6 +49,10 @@ public class Addressing {
 					log.info(testRequestDevicesOnZero);
 					serialPort.writeBytes(hdlcFrameAddressingOnEmptyList.getBytes(),
 								hdlcFrameAddressingOnEmptyList.getLength());
+					//Debug output
+//					for(int i=0;i<hdlcFrameAddressingOnEmptyList.getBytes().length;i++) {
+//						log.info(Integer.toHexString(hdlcFrameAddressingOnEmptyList.getBytes()[i]  & 0xff ));
+//					}
 					updateTimeStampAddressingOnEmptyList();
 					log.info("timeStampAddressingOnEmptyList after data send: " + timeStampAddressingOnEmptyList);
 				} else { // Mindestens 1 Teilnehmer vorhanden

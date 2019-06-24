@@ -22,6 +22,9 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
 	@AttributeDefinition(name = "Baudrate", description = "The baudrate - e.g. 9600, 19200, 38400, 57600 or 115200")
 	int baudRate() default 460800;
+	
+	@AttributeDefinition(name = "TimeSlots", description = "Timeslots for device addressing, eg. 32")
+	byte timeSlots() default 32;
 
 	String webconsole_configurationFactory_nameHint() default "Bridge LMN wired [{id}]";
 }

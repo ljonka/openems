@@ -1,5 +1,7 @@
 package io.openems.edge.bridge.lmnwired;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -23,6 +25,7 @@ import io.openems.common.worker.AbstractCycleWorker;
 import io.openems.edge.bridge.lmnwired.api.BridgeLMNWired;
 import io.openems.edge.bridge.lmnwired.api.task.LMNWiredTask;
 import io.openems.edge.bridge.lmnwired.hdlc.Addressing;
+import io.openems.edge.bridge.lmnwired.hdlc.HdlcFrame;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.OpenemsComponent;
@@ -41,6 +44,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		implements BridgeLMNWired, OpenemsComponent, EventHandler {
 
 	SerialPort serialPort;
+	SerialPort serialPort2;
 
 	private final Logger log = LoggerFactory.getLogger(BridgeLMNWiredImpl.class);
 
@@ -48,6 +52,8 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 	private final Map<String, LMNWiredTask> tasks = new HashMap<>();
 
 	private Addressing addressing;
+	
+	private byte currentPackage[];
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		;
@@ -88,7 +94,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 		activateSerialDataListener(serialPort);
 
-		addressing = new Addressing(serialPort);
+		addressing = new Addressing(serialPort, config.timeSlots());
 
 	}
 
@@ -150,6 +156,12 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 	 * @param serialPort
 	 */
 	private void activateSerialDataListener(SerialPort serialPort) {
+
+		if (!serialPort.isOpen()) {
+			log.info("SerialPort not available.");
+			return;
+		}
+
 		serialPort.addDataListener(new SerialPortDataListener() {
 			@Override
 			public int getListeningEvents() {
@@ -157,17 +169,48 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 			}
 
 			@Override
-			public void serialEvent(SerialPortEvent event) {
+			public void serialEvent(SerialPortEvent event) {				
+
 				byte[] newData = event.getReceivedData();
-				System.out.println("Received data of size: " + newData.length);
-				for (int i = 0; i < newData.length; ++i)
-					System.out.print((char) newData[i]);
-				System.out.println("\n");
-				addressing.updateTimeStampAddressingOnEmptyList();
-				log.info("timeStampAddressingOnEmptyList after data received: "
-						+ addressing.getTimeStampAddressingOnEmptyList());
+
+				// Lookup start or end byte flag 0x7e
+				if (newData[0] == 0x7e) { // means start
+					// Measure Time
+					addressing.updateTimeStampAddressingOnEmptyList();
+					currentPackage = newData;
+				}
+				else if (newData[newData.length - 1] == 0x7e) { // means end
+					ByteArrayOutputStream concatData = new ByteArrayOutputStream();
+					try {
+						concatData.write(currentPackage);
+						concatData.write(newData);
+						handleReturn(concatData.toByteArray());
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}else {
+					ByteArrayOutputStream concatData = new ByteArrayOutputStream();
+					try {
+						concatData.write(currentPackage);
+						concatData.write(newData);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
 			}
 		});
+	}
+	
+	protected void handleReturn(byte data[]) {
+//		System.out.println("Received data of size: " + data.length);
+//		for (int i = 0; i < data.length; ++i)
+//			System.out.println(Integer.toHexString((byte) data[i] & 0xff));
+//		System.out.println("\n");
+		
+		HdlcFrame hdlcFrame = HdlcFrame.createHdlcFrameFromByte(data);
+
+		log.info("timeStampAddressingOnEmptyList after data received: "
+				+ addressing.getTimeStampAddressingOnEmptyList());
 	}
 
 	@Override
