@@ -19,11 +19,18 @@ public class HdlcFrame {
 	byte source = 0;
 	byte ctrl = 0;
 	byte hcs[];
+	byte hcsData[];
 	byte data[];
 	byte fcs[] = new byte[2];
+	byte fcsData[];
 
 	byte[] retData;
 	int length;
+	
+	enum ResponseType{
+		AddressAssignmentResponse,
+		DataRequestResponse
+	}
 
 	public static HdlcFrame createHdlcFrameFromByte(byte data[]) {
 		HdlcFrame hdlcFrame = new HdlcFrame();
@@ -49,47 +56,43 @@ public class HdlcFrame {
 		// Ctrl
 		hdlcFrame.setCtrl(data[6]);
 		
-		// HCS
-		hdlcFrame.setHCS(Arrays.copyOfRange(data, 7, 8));
-
 		// Data
 		int dataLength = length - 10 + 9;
 		hdlcFrame.setData(Arrays.copyOfRange(data, 9, dataLength));
 		
-		if(hdlcFrame.getHCS() != hdlcFrame.hcs) {
-			System.out.println("Fehler in HCS Prüfung!");
+		// HCS
+		byte tmpHCS[] = new byte[2];
+		tmpHCS[0] = data[7];
+		tmpHCS[1] = data[8];
+		
+		hdlcFrame.setHCSData();
+		byte newHCS[] = hdlcFrame.setHCS();	
+				
+		if( !Arrays.equals(tmpHCS, newHCS) ) {
+			System.out.println("HCS Value not valid!");
+			return null;
 		}
 
 		// FCS
-		hdlcFrame.setFCS(Arrays.copyOfRange(data, length - 1, length));
-
+		byte tmpFCS[] = new byte[2];
+		tmpFCS[0] = data[data.length - 3];
+		tmpFCS[1] = data[data.length - 2];			
+		
+		hdlcFrame.setFCSData();
+		byte newFCS[] = hdlcFrame.setFCS();
+		
 		// Check FCS
+		if(!Arrays.equals(tmpFCS, newFCS)) {
+			System.out.println("FCS Value not valid!");
+			return null;
+		}
 
 		return hdlcFrame;
 	}
 
-	public byte[] getHCS() {
-		if (data != null) {
-			byte hcsData[] = getHCSData();
-			long calcHCS = calculateCRC(hcsData);
-			byte tmpHcs[] = new byte[2];
-			tmpHcs[1] = (byte) calcHCS;
-			tmpHcs[0] = (byte) (calcHCS >> 8);
-			return tmpHcs;
-		} else {
-			return null;
-		}
-		
-	}
-
-	public boolean checkFCS() {
-
-		return true;
-	}
-
 	/**
 	 * 
-	 * @param formatBits
+	 * @param length num data bytes
 	 * @return
 	 */
 	public boolean setFormat(int length) {
@@ -131,24 +134,19 @@ public class HdlcFrame {
 		return true;
 	}
 
-	public boolean setHCS(byte hcs[]) {
-		this.hcs = hcs;
-
-		return true;
+	public byte[] setHCS() {
+		if (data != null) {
+			short calcHCS = (short)calculateCRC(hcsData);
+			hcs = new byte[2];
+			hcs[1] = (byte) calcHCS;
+			hcs[0] = (byte) (calcHCS >> 8);
+			return hcs;
+		} else {
+			hcs = null;
+			return null;
+		}
 	}
-
-	public boolean setData(byte data[]) {
-		this.data = data;
-
-		return true;
-	}
-
-	public boolean setFCS(byte fcs[]) {
-		this.fcs = fcs;
-
-		return true;
-	}
-
+	
 	public byte[] getHCSData() {
 		ByteArrayOutputStream hcsOutput = new ByteArrayOutputStream();
 		try {
@@ -162,15 +160,32 @@ public class HdlcFrame {
 		}
 		return hcsOutput.toByteArray();
 	}
+	
+	private void setHCSData() {
+		hcsData = getHCSData();
+		
+	}
 
-	public byte[] getBytes() {
+	public boolean setData(byte data[]) {
+		this.data = data;
 
-		// First Step: Combine Ctrl, Source, Dest and Format
-		byte hcsData[] = getHCSData();
+		return true;
+	}
+	
+	public ResponseType responseType() {
+		return ResponseType.DataRequestResponse;
+	}
 
-		// Second Step: Calc and add HCS if needed
-		hcs = getHCS();
+	public byte[] setFCS() {
+		short calcFCS = (short) calculateCRC(fcsData);
 
+		fcs[1] = (byte) calcFCS;
+		fcs[0] = (byte) (calcFCS >> 8);
+
+		return fcs;
+	}
+	
+	public byte[] getFCSData() {
 		ByteArrayOutputStream fcsOutput = new ByteArrayOutputStream();
 		try {
 			fcsOutput.write(hcsData);
@@ -178,21 +193,35 @@ public class HdlcFrame {
 				fcsOutput.write(hcs);
 			if (data != null)
 				fcsOutput.write(data);
+
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		return fcsOutput.toByteArray();
+	}
+	
+	private void setFCSData() {
+		fcsData = getFCSData();
+	}
+
+	public byte[] getBytes() {
+
+		// First Step: Combine Ctrl, Source, Dest and Format
+		setHCSData();
+
+		// Second Step: Calc and add HCS if needed
+		setHCS();
+
+		//Set FCSData
+		setFCSData();
 
 		// Third Step: Add FCS and add combine with data
-
-		short calcFCS = (short) calculateCRC(fcsOutput.toByteArray());
-
-		fcs[1] = (byte) calcFCS;
-		fcs[0] = (byte) (calcFCS >> 8);
+		setFCS();
 
 		ByteArrayOutputStream output = new ByteArrayOutputStream();
 		try {
 			output.write(new byte[] { flag });
-			output.write(fcsOutput.toByteArray());
+			output.write(fcsData);
 			output.write(fcs);
 			output.write(new byte[] { flag });
 		} catch (IOException e) {
@@ -228,6 +257,14 @@ public class HdlcFrame {
 
 		crc &= 0xffff;
 		return crc;
+	}
+
+	public byte[] getData() {
+		return data;
+	}
+
+	public byte getSource() {
+		return source;
 	}
 
 }
