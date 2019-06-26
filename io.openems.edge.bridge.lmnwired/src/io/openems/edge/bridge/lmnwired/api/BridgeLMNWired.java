@@ -1,8 +1,12 @@
 package io.openems.edge.bridge.lmnwired.api;
 
 import io.openems.edge.bridge.lmnwired.api.task.LMNWiredTask;
+import io.openems.edge.bridge.lmnwired.hdlc.Addressing;
 import io.openems.edge.common.channel.Doc;
 import io.openems.common.channel.Level;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import com.fazecast.jSerialComm.SerialPort;
 
@@ -28,14 +32,18 @@ public interface BridgeLMNWired {
 		public Doc doc() {
 			return this.doc;
 		}
-	}
+	}	
 
-
+	List<Device> deviceList = new ArrayList<Device>();
+	Addressing addressing = null;
+	public Addressing getAddressing();
 
 	public void addTask(String sourceId, LMNWiredTask task);
 
 	public SerialPort getSerialConnection();
 
 	public void removeTask(String sourceId);
+	
+	public List<Device> getDeviceList();
 
 }

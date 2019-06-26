@@ -1,0 +1,81 @@
+package io.openems.edge.meter.consolinno.d0;
+
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.cm.ConfigurationAdmin;
+import org.osgi.service.component.ComponentContext;
+import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
+import org.osgi.service.component.annotations.ReferencePolicyOption;
+
+import io.openems.edge.bridge.lmnwired.api.AbstractOpenEmsLMNWiredComponent;
+import io.openems.edge.bridge.lmnwired.api.BridgeLMNWired;
+import io.openems.edge.bridge.lmnwired.api.Device;
+import io.openems.edge.bridge.lmnwired.api.task.LMNWiredTask;
+import io.openems.edge.common.component.OpenemsComponent;
+import io.openems.edge.meter.api.AsymmetricMeter;
+import io.openems.edge.meter.api.MeterType;
+import io.openems.edge.meter.api.SymmetricMeter;
+
+import org.osgi.service.metatype.annotations.Designate;
+import org.osgi.service.component.annotations.ConfigurationPolicy;
+
+@Designate(ocd = Config.class, factory = true)
+@Component(name = "io.openems.edge.meter.consolinno.d0", //
+		immediate = true, //
+		configurationPolicy = ConfigurationPolicy.REQUIRE)
+
+public class MeterConsolinnoD0 extends AbstractOpenEmsLMNWiredComponent
+		implements SymmetricMeter, AsymmetricMeter, OpenemsComponent {
+
+	@Reference
+	protected ConfigurationAdmin cm;
+	
+	private MeterType meterType = MeterType.GRID;
+
+	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
+	protected BridgeLMNWired bridgeLMNWired;
+
+	public MeterConsolinnoD0() {
+		super(OpenemsComponent.ChannelId.values(), //
+				SymmetricMeter.ChannelId.values(), //
+				AsymmetricMeter.ChannelId.values());
+	}
+
+	@Activate
+	void activate(ComponentContext context, Config config) {
+		super.activate(context, config.id(), config.alias(), config.enabled(), this.cm, "lmnwired",
+				config.lmnwired_id(), config.service_pid());
+
+		// update filter for 'lmnwired'
+		if (OpenemsComponent.updateReferenceFilter(cm, config.service_pid(), "lmnwired", config.lmnwired_id())) {
+			return;
+		}
+
+		// Add one read task per obis
+		for (Device tmpDevice : bridgeLMNWired.getDeviceList()) {
+			if (tmpDevice.getSerialNumber() == config.serialNumber().getBytes()) {
+				if (config.use180())
+					this.bridgeLMNWired.addTask(config.id(), new LMNWiredTask(this, bridgeLMNWired, tmpDevice, "1.8.0",
+							SymmetricMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY));
+				if (config.use280())
+					this.bridgeLMNWired.addTask(config.id(), new LMNWiredTask(this, bridgeLMNWired, tmpDevice, "2.8.0",
+							SymmetricMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY));
+			}
+		}
+
+	}
+
+	@Deactivate
+	protected void deactivate() {
+		super.deactivate();
+	}
+
+	@Override
+	public MeterType getMeterType() {
+		return meterType;
+	}
+
+}

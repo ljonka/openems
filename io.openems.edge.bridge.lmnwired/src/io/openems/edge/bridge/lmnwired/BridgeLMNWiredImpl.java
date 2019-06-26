@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -51,7 +50,6 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		implements BridgeLMNWired, OpenemsComponent, EventHandler {
 
 	SerialPort serialPort;
-	SerialPort serialPort2;
 
 	private final Logger log = LoggerFactory.getLogger(BridgeLMNWiredImpl.class);
 
@@ -67,7 +65,6 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 	int timeslots;
 	int timeSlotDurationInMs;
 	NumberFormat numberFormat = new DecimalFormat("0.0");
-	List<Device> deviceList;
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		;
@@ -86,10 +83,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 	public BridgeLMNWiredImpl() {
 		super(//
-				OpenemsComponent.ChannelId.values(), //
-				BridgeLMNWired.ChannelId.values(), //
-				ChannelId.values() //
-		);
+				OpenemsComponent.ChannelId.values());
 	}
 
 	@Activate
@@ -105,17 +99,16 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		serialPort.setParity(0);
 		serialPort.setBaudRate(config.baudRate());
 		serialPort.openPort();
-		
+
 		timeslotsTime = config.timeSlots() * 2 * config.timeSlotDurationInMs();
 		timeslots = config.timeSlots();
 		timeSlotDurationInMs = config.timeSlotDurationInMs();
-		deviceList = new ArrayList<Device>();
 
-	    numberFormat.setRoundingMode(RoundingMode.DOWN);
+		numberFormat.setRoundingMode(RoundingMode.DOWN);
 
-		activateSerialDataListener(serialPort);
+		activateSerialDataListener();
 
-		addressing = new Addressing(serialPort, config.timeSlots(), timeslotsTime, deviceList);
+		addressing = new Addressing(serialPort, config.timeSlots(), timeslotsTime, deviceList, this);
 	}
 
 	@Deactivate
@@ -162,9 +155,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		protected void forever() {
 
 			for (LMNWiredTask task : tasks.values()) {
-				Object data = null;
-				data = task.getRequest();
-				task.setResponse(data);
+				task.getRequest();
 			}
 
 		}
@@ -175,7 +166,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 	 * 
 	 * @param serialPort
 	 */
-	private void activateSerialDataListener(SerialPort serialPort) {
+	public void activateSerialDataListener() {
 
 		if (!serialPort.isOpen()) {
 			log.info("SerialPort not available.");
@@ -198,6 +189,9 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 					// Measure Time
 					receiveTimeMeasure = addressing.setTimeStampAddressingEnd();
 					currentPackage = newData;
+					if (newData[newData.length - 1] == 0x7e) { // For Short Package including start and end in one
+						handleReturn(currentPackage, receiveTimeMeasure);
+					}
 				} else if (newData[newData.length - 1] == 0x7e) { // means end
 					ByteArrayOutputStream concatData = new ByteArrayOutputStream();
 					try {
@@ -231,44 +225,71 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 			double usedTimeSlot = Math.floor(usedTimeSlotBeta);
 			double tmpTimeSlotFactor = usedTimeSlotBeta - usedTimeSlot;
 			if (addressing.isAddressingInProgress()) {
-				if(tmpTimeSlotFactor <= 0.5) { //in data time window
+				if (tmpTimeSlotFactor <= 0.5) { // in data time window
 					log.info("HDLC Frame is new device data!");
-					//Add device to List
+					// Add device to List
 					Device device = new Device(hdlcFrame.getSource(), Arrays.copyOfRange(hdlcFrame.getData(), 2, 16));
-					//Check if device is already in list
+					// Check if device is already in list
 					boolean deviceInList = false;
-					for(Device tmpDevice: deviceList) {
-						if(Arrays.equals(tmpDevice.getSerialNumber(), device.getSerialNumber())) {
+					for (Device tmpDevice : deviceList) {
+						if (Arrays.equals(tmpDevice.getSerialNumber(), device.getSerialNumber())) {
 							deviceInList = true;
 						}
 					}
-					if(!deviceInList) { //Finally add to list
+					if (!deviceInList) { // Finally add to list
 						deviceList.add(device);
 					}
-				}else { //in guard time, ignore package
+				} else { // in guard time, ignore package
 					log.info("HDLC Frame is new device data but in guard time!");
 				}
 
-			} else if (addressing.isCheckupInProgress()){
+			} else if (addressing.isCheckupInProgress()) {
 				log.info("HDLC Frame presence check response");
 				Device device = new Device(hdlcFrame.getSource(), Arrays.copyOfRange(hdlcFrame.getData(), 2, 16));
-				for(Device tmpDevice: deviceList) {
-					if(Arrays.equals(tmpDevice.getSerialNumber(), device.getSerialNumber())) {
+				for (Device tmpDevice : deviceList) {
+					if (Arrays.equals(tmpDevice.getSerialNumber(), device.getSerialNumber())) {
 						tmpDevice.setPresent();
 					}
 				}
-				
-			} else{				
+
+			} else {
 				log.info("HDLC Frame is data");
+
+				// Debug output
+//				for(int i=0;i<data.length;i++) {
+//					System.out.print(Integer.toHexString(data[i]  & 0xff ) + " ");
+//				}
+//				System.out.print("\n");
+				// Lookup device task for received data
+				for (Device tmpDevice : deviceList) {
+					if (tmpDevice.getHdlcAddress() == hdlcFrame.getSource()) {
+						LMNWiredTask currentDask = tmpDevice.getCurrentTask();
+						// Set Task Data if task is set in device
+						if (currentDask != null)
+							currentDask.setResponse(hdlcFrame);
+					}
+				}
+
+				System.out.println(new String(hdlcFrame.getData()));
+//				 serialPort.removeDataListener();
 			}
 		} else {
 			log.info("HDLC Frame received, check HCS or FCS");
 		}
 	}
+	
+	public Addressing getAddressing() {
+		return addressing;
+	}
 
 	@Override
 	public SerialPort getSerialConnection() {
 		return serialPort;
+	}
+
+	@Override
+	public List<Device> getDeviceList() {
+		return deviceList;
 	}
 
 }
