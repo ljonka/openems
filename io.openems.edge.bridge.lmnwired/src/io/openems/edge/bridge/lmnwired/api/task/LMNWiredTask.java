@@ -1,5 +1,8 @@
 package io.openems.edge.bridge.lmnwired.api.task;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.openems.edge.bridge.lmnwired.api.AbstractOpenEmsLMNWiredComponent;
 import io.openems.edge.bridge.lmnwired.api.BridgeLMNWired;
 import io.openems.edge.bridge.lmnwired.api.Device;
@@ -19,6 +22,7 @@ public class LMNWiredTask {
 	int hdlcDataLength;
 	SymmetricMeter.ChannelId channel;
 	int millisForTimeout = 5;	
+	private final Logger log = LoggerFactory.getLogger(LMNWiredTask.class);
 
 	public LMNWiredTask(AbstractOpenEmsLMNWiredComponent abstractOpenEmsLMNWiredComponent,
 			BridgeLMNWired bridgeLMNWired, Device device, String obisPart, SymmetricMeter.ChannelId channel) {
@@ -51,6 +55,8 @@ public class LMNWiredTask {
 	}
 
 	public void setResponse(HdlcFrame hdlcFrame) {
+		log.debug("Set channel data: " + new String(hdlcFrame.getData()));
+		log.debug("For device: " + new String(device.getSerialNumber()));
 		abstractOpenEmsLMNWiredComponent.channel(channel).setNextValue(new String(hdlcFrame.getData()));
 	}
 

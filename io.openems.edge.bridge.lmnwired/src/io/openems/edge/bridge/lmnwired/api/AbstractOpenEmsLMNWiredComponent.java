@@ -9,6 +9,7 @@ import io.openems.edge.common.component.AbstractOpenemsComponent;
 
 public abstract class AbstractOpenEmsLMNWiredComponent extends AbstractOpenemsComponent {
 
+	@SuppressWarnings("unused")
 	private final Logger log = LoggerFactory.getLogger(AbstractOpenEmsLMNWiredComponent.class);
 
 	protected AbstractOpenEmsLMNWiredComponent(io.openems.edge.common.channel.ChannelId[] firstInitialChannelIds,
@@ -17,8 +18,8 @@ public abstract class AbstractOpenEmsLMNWiredComponent extends AbstractOpenemsCo
 	}
 
 	protected void activate(ComponentContext context, String id, String alias, boolean enabled,
-			ConfigurationAdmin cm, String mbusReference, String mbusId, String service_pid) {
-		super.activate(context, service_pid, id, enabled);
+			ConfigurationAdmin cm, String service_pid) {
+		super.activate(context, id, alias, enabled);
 	}
 
 }
