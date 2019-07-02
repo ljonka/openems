@@ -1,5 +1,6 @@
 package io.openems.edge.bridge.lmnwired.hdlc;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -39,7 +40,7 @@ public class Addressing {
 	List<Device> deviceList;
 	protected boolean addressingInProgress = false;
 	protected boolean presenceCheckInProgress = false;
-	protected List<LMNWiredTask> dataRequestQueue;
+	protected List<LMNWiredTask> dataRequestQueue = new ArrayList<LMNWiredTask>();
 	protected LMNWiredTask currentDataRequestTask;
 
 	/**
@@ -56,7 +57,7 @@ public class Addressing {
 		service = Executors.newSingleThreadScheduledExecutor();
 
 		if (!serialPort.isOpen()) {
-			log.info("SerialPort not open.");
+			log.debug("SerialPort not open.");
 			return;
 		}
 
@@ -64,7 +65,6 @@ public class Addressing {
 
 			public void run() {
 				addressingInProgress = false;
-//				serialPort.removeDataListener();
 			}
 
 		};
@@ -73,31 +73,33 @@ public class Addressing {
 		Runnable runnableInviteNewDevices = new Runnable() {
 			public void run() {
 
-				// Noch kein Teilnehmer vorhanden
-				if (deviceList.isEmpty()) {
-					log.info(testRequestDevicesOnZero);
-					serialPort.writeBytes(hdlcFrameAddressingOnEmptyList.getBytes(),
-							hdlcFrameAddressingOnEmptyList.getLength());
-				} else { // Mindestens 1 Teilnehmer vorhanden
-					log.info(testRequestDevicesWithExisting);
-					
+				if (!isCheckupInProgress()) {
+					// Noch kein Teilnehmer vorhanden
+					if (deviceList.isEmpty()) {
+						log.debug(testRequestDevicesOnZero);
+						serialPort.writeBytes(hdlcFrameAddressingOnEmptyList.getBytes(),
+								hdlcFrameAddressingOnEmptyList.getLength());
+					} else { // Mindestens 1 Teilnehmer vorhanden
+						log.debug(testRequestDevicesWithExisting);
+
 //					for(Device tmpDevice: deviceList) {
-//						log.info(new String(tmpDevice.getSerialNumber()));
-//						log.info(Integer.toString(tmpDevice.getHdlcAddress()));
+//						log.debug(new String(tmpDevice.getSerialNumber()));
+//						log.debug(Integer.toString(tmpDevice.getHdlcAddress()));
 //					}
 
-					hdlcFrameAddressingOnDevicesInList = new HdlcFrameAddressingOnDevicesInList((byte) timeSlots,
-							deviceList);
+						hdlcFrameAddressingOnDevicesInList = new HdlcFrameAddressingOnDevicesInList((byte) timeSlots,
+								deviceList);
 
-					serialPort.writeBytes(hdlcFrameAddressingOnDevicesInList.getBytes(),
-							hdlcFrameAddressingOnDevicesInList.getLength());
+						serialPort.writeBytes(hdlcFrameAddressingOnDevicesInList.getBytes(),
+								hdlcFrameAddressingOnDevicesInList.getLength());
+					}
+
+					setTimeStampAddressing();
+
+					addressingInProgress = true;
+
+					service.schedule(runnableAfterAddressingTimeEnd, timeslotsTime, TimeUnit.MILLISECONDS);
 				}
-
-				setTimeStampAddressing();
-
-				addressingInProgress = true;
-
-				service.schedule(runnableAfterAddressingTimeEnd, timeslotsTime, TimeUnit.MILLISECONDS);
 			}
 
 		};
@@ -116,13 +118,13 @@ public class Addressing {
 
 			public void run() {
 
-				if (!deviceList.isEmpty()) {
-					log.info(testRequestDevicePresenceCheck + " for " + deviceList.size() + " devices");
-					
-//					for(Device tmpDevice: deviceList) {
-//						log.info(new String(tmpDevice.getSerialNumber()));
-//						log.info(Integer.toString(tmpDevice.getHdlcAddress()));
-//					}			
+				if (!deviceList.isEmpty() && !isAddressingInProgress()) {
+					log.debug(testRequestDevicePresenceCheck + " for " + deviceList.size() + " devices");
+
+					for (Device tmpDevice : deviceList) {
+						log.debug(new String(tmpDevice.getSerialNumber()));
+//						log.debug(Integer.toString(tmpDevice.getHdlcAddress()));
+					}
 
 					hdlcFrameCheckDevicesInList = new HdlcFrameCheckDevicesInList((byte) timeSlots, deviceList);
 
@@ -139,7 +141,7 @@ public class Addressing {
 			}
 
 		};
-		
+
 		// Check device presence
 		Runnable runnableDataRequest = new Runnable() {
 
@@ -148,11 +150,11 @@ public class Addressing {
 				if (!dataRequestQueue.isEmpty() && !isAddressingInProgress() && !isCheckupInProgress()) {
 					currentDataRequestTask = dataRequestQueue.get(0);
 					currentDataRequestTask.getDevice().setCurrentTask(currentDataRequestTask);
-					log.info("Request obis data for device");
+					log.debug("Request obis data for device");
 
 					serialPort.writeBytes(currentDataRequestTask.getHdlcData(),
 							currentDataRequestTask.getHdlcDataLength());
-					
+
 					dataRequestQueue.remove(currentDataRequestTask);
 				}
 
@@ -160,11 +162,36 @@ public class Addressing {
 
 		};
 
+		// Check device presence
+//		Runnable runnableTestDataRequest = new Runnable() {
+//
+//			public void run() {
+//
+//				if (!deviceList.isEmpty() && !isAddressingInProgress() && !isCheckupInProgress()) {
+//					log.debug("Request obis data for device");
+//					HdlcFrameDeviceDataRequest hdlcFrameDeviceDataRequest = new HdlcFrameDeviceDataRequest(
+//							deviceList.get(0), "2.8.0");
+//
+//					serialPort.writeBytes(hdlcFrameDeviceDataRequest.getBytes(),
+//							hdlcFrameDeviceDataRequest.getLength());
+//					
+//				}
+//
+//			}
+//
+//		};
+
+		// Live
 		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 10, TimeUnit.SECONDS);
 		service.scheduleAtFixedRate(runnableCheckDevicePresence, 5, 10, TimeUnit.SECONDS);
 		service.scheduleAtFixedRate(runnableDataRequest, 0, 10, TimeUnit.MILLISECONDS);
+
+		// Testing
+//		service.schedule(runnableInviteNewDevices, 0,TimeUnit.SECONDS);
+//		service.schedule(runnableCheckDevicePresence, 5, TimeUnit.SECONDS);
+//		service.scheduleAtFixedRate(runnableTestDataRequest, 0, 1, TimeUnit.SECONDS);
 	}
-	
+
 	public void addHdlcDataRequest(LMNWiredTask lMNWiredTask) {
 		dataRequestQueue.add(lMNWiredTask);
 	}

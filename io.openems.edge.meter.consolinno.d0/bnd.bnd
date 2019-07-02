@@ -11,7 +11,7 @@ Bundle-Version:					1.0.0.${tstamp}
 -buildpath: \
 	${buildpath},\
 	io.openems.common;version=latest,\
-	io.openems.edge.common;version=latest,\	
+	io.openems.edge.common;version=latest,\
 	io.openems.edge.meter.api;version=latest,\
 	io.openems.edge.bridge.lmnwired;version=latest
 	

@@ -1,7 +1,6 @@
 package io.openems.edge.bridge.lmnwired.api;
 
 import java.io.ByteArrayOutputStream;
-import java.util.List;
 
 import io.openems.edge.bridge.lmnwired.api.task.LMNWiredTask;
 

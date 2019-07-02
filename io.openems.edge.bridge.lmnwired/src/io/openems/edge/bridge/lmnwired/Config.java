@@ -28,6 +28,9 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	
 	@AttributeDefinition(name = "TimeSlotDuration in ms", description = "Timeslot duration for device addressing, eg. 5")
 	byte timeSlotDurationInMs() default 5;
-
+	
+	@AttributeDefinition(name = "Devices", description = "Current Devices in list")
+	String[] devices() default {};
+	
 	String webconsole_configurationFactory_nameHint() default "Bridge LMN wired [{id}]";
 }

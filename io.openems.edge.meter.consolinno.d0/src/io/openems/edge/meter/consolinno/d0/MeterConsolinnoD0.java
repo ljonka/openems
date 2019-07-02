@@ -3,6 +3,7 @@ package io.openems.edge.meter.consolinno.d0;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
+
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Reference;
@@ -12,7 +13,6 @@ import org.osgi.service.component.annotations.ReferencePolicyOption;
 
 import io.openems.edge.bridge.lmnwired.api.AbstractOpenEmsLMNWiredComponent;
 import io.openems.edge.bridge.lmnwired.api.BridgeLMNWired;
-import io.openems.edge.bridge.lmnwired.api.Device;
 import io.openems.edge.bridge.lmnwired.api.task.LMNWiredTask;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.meter.api.AsymmetricMeter;
@@ -34,9 +34,9 @@ public class MeterConsolinnoD0 extends AbstractOpenEmsLMNWiredComponent
 
 	@Reference
 	protected ConfigurationAdmin cm;
-	
+
 	private MeterType meterType = MeterType.GRID;
-	
+
 	private final Logger log = LoggerFactory.getLogger(MeterConsolinnoD0.class);
 
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
@@ -56,20 +56,16 @@ public class MeterConsolinnoD0 extends AbstractOpenEmsLMNWiredComponent
 		if (OpenemsComponent.updateReferenceFilter(cm, config.service_pid(), "lmnwired", config.lmnwired_id())) {
 			return;
 		}
-		
+
 		log.info("Add Tasks for Meter: " + config.serialNumber());
 
 		// Add one read task per obis
-		for (Device tmpDevice : bridgeLMNWired.getDeviceList()) {
-			if (tmpDevice.getSerialNumber() == config.serialNumber().getBytes()) {
-				if (config.use180())
-					this.bridgeLMNWired.addTask(config.id(), new LMNWiredTask(this, bridgeLMNWired, tmpDevice, "1.8.0",
-							SymmetricMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY));
-				if (config.use280())
-					this.bridgeLMNWired.addTask(config.id(), new LMNWiredTask(this, bridgeLMNWired, tmpDevice, "2.8.0",
-							SymmetricMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY));
-			}
-		}
+		if (config.use180())
+			this.bridgeLMNWired.addTask(config.id(), new LMNWiredTask(this, bridgeLMNWired, config.serialNumber(),
+					"1.8.0", SymmetricMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY));
+		if (config.use280())
+			this.bridgeLMNWired.addTask(config.id(), new LMNWiredTask(this, bridgeLMNWired, config.serialNumber(),
+					"2.8.0", SymmetricMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY));
 	}
 
 	@Deactivate
