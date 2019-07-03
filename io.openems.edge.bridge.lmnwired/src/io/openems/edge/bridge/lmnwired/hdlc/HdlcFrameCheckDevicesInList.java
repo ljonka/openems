@@ -20,7 +20,9 @@ public class HdlcFrameCheckDevicesInList extends HdlcFrame {
 		
 		ByteArrayOutputStream dataClients = new ByteArrayOutputStream();
 		for(Device device: deviceList) {
+			
 			try {
+				//Write serialNumber from device with timeslot
 				dataClients.write(device.getBytesForAddress(deviceList.indexOf(device) + 1));
 			} catch (IOException e) {
 				// TODO Auto-generated catch block

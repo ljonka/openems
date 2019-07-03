@@ -61,11 +61,11 @@ public class MeterConsolinnoD0 extends AbstractOpenEmsLMNWiredComponent
 
 		// Add one read task per obis
 		if (config.use180())
-			this.bridgeLMNWired.addTask(config.id(), new LMNWiredTask(this, bridgeLMNWired, config.serialNumber(),
-					"1.8.0", SymmetricMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY));
+			this.bridgeLMNWired.addTask(config.id() + "_180", new LMNWiredTask(this, bridgeLMNWired, config.serialNumber(),
+					"1.8.0", SymmetricMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY));
 		if (config.use280())
-			this.bridgeLMNWired.addTask(config.id(), new LMNWiredTask(this, bridgeLMNWired, config.serialNumber(),
-					"2.8.0", SymmetricMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY));
+			this.bridgeLMNWired.addTask(config.id() + "_280", new LMNWiredTask(this, bridgeLMNWired, config.serialNumber(),
+					"2.8.0", SymmetricMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY));
 	}
 
 	@Deactivate

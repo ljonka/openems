@@ -35,7 +35,7 @@ import io.openems.common.worker.AbstractCycleWorker;
 import io.openems.edge.bridge.lmnwired.api.BridgeLMNWired;
 import io.openems.edge.bridge.lmnwired.api.Device;
 import io.openems.edge.bridge.lmnwired.api.task.LMNWiredTask;
-import io.openems.edge.bridge.lmnwired.hdlc.Addressing;
+import io.openems.edge.bridge.lmnwired.hdlc.PackageHandler;
 import io.openems.edge.bridge.lmnwired.hdlc.HdlcFrame;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
@@ -61,7 +61,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 	private final LMNWiredWorker worker = new LMNWiredWorker();
 	private final Map<String, LMNWiredTask> tasks = new HashMap<>();
 
-	private Addressing addressing;
+	private PackageHandler addressing;
 
 	private byte currentPackage[];
 
@@ -71,10 +71,10 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 	int timeSlotDurationInMs;
 	NumberFormat numberFormat = new DecimalFormat("0.0");
 	Config config;
-	
+
 	@Reference
 	protected ConfigurationAdmin cm;
-	
+
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		;
 
@@ -115,10 +115,10 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		timeSlotDurationInMs = config.timeSlotDurationInMs();
 
 		numberFormat.setRoundingMode(RoundingMode.DOWN);
-
+		
 		activateSerialDataListener();
 
-		addressing = new Addressing(serialPort, config.timeSlots(), timeslotsTime, deviceList, this);
+		addressing = new PackageHandler(serialPort, config.timeSlots(), timeslotsTime, deviceList, this);
 	}
 
 	@Deactivate
@@ -191,7 +191,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 			@Override
 			public void serialEvent(SerialPortEvent event) {
-
+				
 				byte[] newData = event.getReceivedData();
 
 				// Lookup start or end byte flag 0x7e
@@ -223,9 +223,12 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 			}
 		});
 	}
+	
+	public void deactivateSerialDataListener() {
+		serialPort.removeDataListener();
+	}
 
 	protected void handleReturn(byte data[], long receiveTimeMeasure) {
-
 		HdlcFrame hdlcFrame = HdlcFrame.createHdlcFrameFromByte(data);
 		if (hdlcFrame != null) {
 //			log.debug("HDLC Frame received, party hard!");
@@ -257,25 +260,32 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 			} else if (addressing.isCheckupInProgress()) {
 				log.info("HDLC Frame presence check response");
 				Device device = new Device(hdlcFrame.getSource(), Arrays.copyOfRange(hdlcFrame.getData(), 2, 16));
+
 				for (Device tmpDevice : deviceList) {
 					if (tmpDevice.getHdlcAddress() == device.getHdlcAddress()) {
-						if(!Arrays.equals(tmpDevice.getSerialNumber(), device.getSerialNumber())) {
+						if (!Arrays.equals(tmpDevice.getSerialNumber(), device.getSerialNumber())) {
 							tmpDevice.setSerialNumber(device.getSerialNumber());
 						}
 						tmpDevice.setPresent();
 					}
-				}				
+				}
 
 			} else {
 				log.info("HDLC Frame is data");
 
 				// Lookup device task for received data
 				for (Device tmpDevice : deviceList) {
+					log.info("Search device");
 					if (tmpDevice.getHdlcAddress() == hdlcFrame.getSource()) {
-						LMNWiredTask currentTask = tmpDevice.getCurrentTask();
+						log.info("Search task");
+						LMNWiredTask currentTask = tmpDevice.getFirstTask();
 						// Set Task Data if task is set in device
-						if (currentTask != null)
+						if (currentTask != null) {
+							log.info("Task found");
 							currentTask.setResponse(hdlcFrame);
+						}else {
+							log.info("Task not found");
+						}
 					}
 				}
 
@@ -284,8 +294,8 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 			log.debug("HDLC Frame received, check HCS or FCS");
 		}
 	}
-	
-	public Addressing getAddressing() {
+
+	public PackageHandler getAddressing() {
 		return addressing;
 	}
 
@@ -298,16 +308,16 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 	public List<Device> getDeviceList() {
 		return deviceList;
 	}
-	
+
 	public void updateConfigDevices() {
 		ArrayList<String> configDevices = new ArrayList<String>();
-		for(Device tmpDevice: deviceList) {
+		for (Device tmpDevice : deviceList) {
 			configDevices.add(new String(tmpDevice.getSerialNumber()));
 		}
 		Dictionary<String, ArrayList<String>> map = new Hashtable<String, ArrayList<String>>();
 		map.put("devices", configDevices);
-		try {			
-			cm.getConfiguration(this.servicePid()).update(map);			
+		try {
+			cm.getConfiguration(this.servicePid()).update(map);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();

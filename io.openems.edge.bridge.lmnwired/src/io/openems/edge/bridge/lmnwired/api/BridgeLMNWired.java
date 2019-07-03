@@ -1,7 +1,7 @@
 package io.openems.edge.bridge.lmnwired.api;
 
 import io.openems.edge.bridge.lmnwired.api.task.LMNWiredTask;
-import io.openems.edge.bridge.lmnwired.hdlc.Addressing;
+import io.openems.edge.bridge.lmnwired.hdlc.PackageHandler;
 import io.openems.edge.common.channel.Doc;
 import io.openems.common.channel.Level;
 
@@ -35,8 +35,8 @@ public interface BridgeLMNWired {
 	}	
 
 	List<Device> deviceList = new ArrayList<Device>();
-	Addressing addressing = null;
-	public Addressing getAddressing();
+	PackageHandler addressing = null;
+	public PackageHandler getAddressing();
 
 	public void addTask(String sourceId, LMNWiredTask task);
 

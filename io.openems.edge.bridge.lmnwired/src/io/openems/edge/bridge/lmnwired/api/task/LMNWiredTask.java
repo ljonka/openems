@@ -47,31 +47,44 @@ public class LMNWiredTask {
 
 	public boolean getRequest() {
 
-		for (Device tmpDevice : bridgeLMNWired.getDeviceList()) {
-			if (new String(tmpDevice.getSerialNumber()).equals(serialNumber)) {
-				device = tmpDevice;
-				HdlcFrameDeviceDataRequest hdlcFrameDeviceDataRequest = new HdlcFrameDeviceDataRequest(device,
-						obisPart);
-				device.setCurrentTask(this);
-				hdlcData = hdlcFrameDeviceDataRequest.getBytes();
-				hdlcDataLength = hdlcFrameDeviceDataRequest.getLength();
-				bridgeLMNWired.getAddressing().addHdlcDataRequest(this);
-			}
-		}
+		if (!bridgeLMNWired.getDeviceList().isEmpty())
+			for (Device tmpDevice : bridgeLMNWired.getDeviceList()) {
+				if (new String(tmpDevice.getSerialNumber()).equals(serialNumber)) {
+					device = tmpDevice;
 
-		return true;
+					log.info("Reqeust Data for channel: " + obisPart);
+
+					HdlcFrameDeviceDataRequest hdlcFrameDeviceDataRequest = new HdlcFrameDeviceDataRequest(device,
+							obisPart);
+					hdlcData = hdlcFrameDeviceDataRequest.getBytes();
+					hdlcDataLength = hdlcFrameDeviceDataRequest.getLength();
+					bridgeLMNWired.getAddressing().addHdlcDataRequest(this);
+
+					device.addTask(this);
+					return true;
+				}
+			}
+
+		return false;
 	}
 
+	/**
+	 * 
+	 * @param hdlcFrame Raw Data Frame
+	 */
 	public void setResponse(HdlcFrame hdlcFrame) {
-		String[] arrData = new String(hdlcFrame.getData()).split("\\*");
-		Float fData = Float.parseFloat(arrData[0]);
-		
-		log.debug("Set channel data: " + fData);
-		log.debug("For device: " + new String(device.getSerialNumber()));
-		//abstractOpenEmsLMNWiredComponent.channel(channel).setNextValue(new String(hdlcFrame.getData()));
+
 		Channel<Float> channel = abstractOpenEmsLMNWiredComponent.channel(channelId);
+		String[] arrData = new String(hdlcFrame.getData()).split("\\*");
+		Float fData = (Float.parseFloat(arrData[0])) * 1000;
 		
-		channel.setNextValue(fData);		
+		log.info("Set channel data: " + fData);
+		log.info("For device: " + new String(device.getSerialNumber()));
+		log.info("For channel: " + obisPart);
+		
+		
+
+		channel.setNextValue(fData);
 	}
 
 }
