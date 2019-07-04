@@ -275,13 +275,13 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 				// Lookup device task for received data
 				for (Device tmpDevice : deviceList) {
-					log.info("Search device");
+//					log.info("Search device");
 					if (tmpDevice.getHdlcAddress() == hdlcFrame.getSource()) {
-						log.info("Search task");
+//						log.info("Search task");
 						LMNWiredTask currentTask = tmpDevice.getFirstTask();
 						// Set Task Data if task is set in device
 						if (currentTask != null) {
-							log.info("Task found");
+//							log.info("Task found");
 							currentTask.setResponse(hdlcFrame);
 						}else {
 							log.info("Task not found");
