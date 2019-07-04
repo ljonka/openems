@@ -258,15 +258,17 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 				}
 
 			} else if (addressing.isCheckupInProgress()) {
-				log.info("HDLC Frame presence check response");
+				log.info("HDLC Frame presence check response");				
 				Device device = new Device(hdlcFrame.getSource(), Arrays.copyOfRange(hdlcFrame.getData(), 2, 16));
-
+				
 				for (Device tmpDevice : deviceList) {
 					if (tmpDevice.getHdlcAddress() == device.getHdlcAddress()) {
 						if (!Arrays.equals(tmpDevice.getSerialNumber(), device.getSerialNumber())) {
 							tmpDevice.setSerialNumber(device.getSerialNumber());
 						}
 						tmpDevice.setPresent();
+						
+						log.info(new String(device.getSerialNumber()));
 					}
 				}
 
@@ -283,6 +285,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 						if (currentTask != null) {
 //							log.info("Task found");
 							currentTask.setResponse(hdlcFrame);
+							currentTask.timeOutOccured = false;
 						}else {
 							log.info("Task not found");
 						}

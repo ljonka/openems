@@ -23,6 +23,7 @@ public class LMNWiredTask {
 	SymmetricMeter.ChannelId channelId;
 	int millisForTimeout = 5;
 	private final Logger log = LoggerFactory.getLogger(LMNWiredTask.class);
+	public boolean timeOutOccured = true;
 
 	public LMNWiredTask(AbstractOpenEmsLMNWiredComponent abstractOpenEmsLMNWiredComponent,
 			BridgeLMNWired bridgeLMNWired, String serialNumber, String obisPart, SymmetricMeter.ChannelId channelId) {
@@ -80,9 +81,7 @@ public class LMNWiredTask {
 		
 		log.info("Set channel data: " + fData);
 		log.info("For device: " + new String(device.getSerialNumber()));
-		log.info("For channel: " + obisPart);
-		
-		
+		log.info("For channel: " + obisPart);		
 
 		channel.setNextValue(fData);
 	}
