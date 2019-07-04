@@ -118,7 +118,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		
 		activateSerialDataListener();
 
-		addressing = new PackageHandler(serialPort, config.timeSlots(), timeslotsTime, deviceList, this);
+		addressing = new PackageHandler(serialPort, config.timeSlots(), timeslotsTime, this);
 	}
 
 	@Deactivate

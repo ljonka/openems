@@ -1,7 +1,6 @@
 package io.openems.edge.bridge.lmnwired.hdlc;
 
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -9,16 +8,12 @@ import java.util.concurrent.TimeUnit;
 
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.annotations.Reference;
-import org.osgi.service.component.annotations.ReferenceCardinality;
-import org.osgi.service.component.annotations.ReferencePolicy;
-import org.osgi.service.component.annotations.ReferencePolicyOption;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.fazecast.jSerialComm.SerialPort;
 
 import io.openems.edge.bridge.lmnwired.BridgeLMNWiredImpl;
-import io.openems.edge.bridge.lmnwired.api.BridgeLMNWired;
 import io.openems.edge.bridge.lmnwired.api.Device;
 import io.openems.edge.bridge.lmnwired.api.task.LMNWiredTask;
 
@@ -35,9 +30,6 @@ public class PackageHandler {
 	private ScheduledExecutorService serviceAddressingEnd = Executors.newSingleThreadScheduledExecutor();
 	private ScheduledExecutorService servicePresenceCheckEnd = Executors.newSingleThreadScheduledExecutor();
 	private ScheduledExecutorService serviceDataRequestTimout = Executors.newSingleThreadScheduledExecutor();
-	private ScheduledExecutorService serviceAddressing = Executors.newSingleThreadScheduledExecutor();
-	private ScheduledExecutorService servicePresenceCheck = Executors.newSingleThreadScheduledExecutor();
-	private ScheduledExecutorService serviceDataRequest = Executors.newSingleThreadScheduledExecutor();
 	private final Logger log = LoggerFactory.getLogger(PackageHandler.class);
 	private String testRequestDevicesOnZero = "Request device registration with zero devices in list.";
 	private String testRequestDevicesWithExisting = "Request device registration with devices in list.";
@@ -52,7 +44,6 @@ public class PackageHandler {
 	protected long timeStampLastDataRequest = 0;
 	protected int timeslotsTime;
 	protected int timeSlots;
-	List<Device> deviceList;
 	protected boolean addressingInProgress = false;
 	protected boolean presenceCheckInProgress = false;
 	protected boolean dataRequestInProgress = false;
@@ -68,14 +59,12 @@ public class PackageHandler {
 	 * 
 	 * @param serialPort
 	 */
-	public PackageHandler(SerialPort serialPort, int timeSlots, int timeslotsTime, List<Device> deviceList,
-			BridgeLMNWiredImpl bridgeLMNWiredImpl) {
+	public PackageHandler(SerialPort serialPort, int timeSlots, int timeslotsTime, BridgeLMNWiredImpl bridgeLMNWiredImpl) {
 		this.bridgeLMNWiredImpl = bridgeLMNWiredImpl;
 		this.serialPort = serialPort;
 		hdlcFrameAddressingOnEmptyList = new HdlcFrameAddressingOnEmptyList((byte) timeSlots);
 		this.timeslotsTime = timeslotsTime;
 		this.timeSlots = timeSlots;
-		this.deviceList = deviceList;
 
 		if (!serialPort.isOpen()) {
 			log.debug("SerialPort not open.");
@@ -101,7 +90,7 @@ public class PackageHandler {
 				bridgeLMNWiredImpl.deactivateSerialDataListener();
 
 				// Noch kein Teilnehmer vorhanden
-				if (deviceList.isEmpty()) {
+				if (bridgeLMNWiredImpl.getDeviceList().isEmpty()) {
 					log.info(testRequestDevicesOnZero);
 					serialPort.writeBytes(hdlcFrameAddressingOnEmptyList.getBytes(),
 							hdlcFrameAddressingOnEmptyList.getLength());
@@ -109,7 +98,7 @@ public class PackageHandler {
 					log.info(testRequestDevicesWithExisting);
 
 					hdlcFrameAddressingOnDevicesInList = new HdlcFrameAddressingOnDevicesInList((byte) timeSlots,
-							deviceList);
+							bridgeLMNWiredImpl.getDeviceList());
 
 					serialPort.writeBytes(hdlcFrameAddressingOnDevicesInList.getBytes(),
 							hdlcFrameAddressingOnDevicesInList.getLength());
@@ -144,9 +133,9 @@ public class PackageHandler {
 
 			if (!bridgeLMNWiredImpl.getDeviceList().isEmpty() && !isCheckupInProgress() && !isAddressingInProgress() && !isDataRequestInProgress()) {
 
-				log.info("Inside Conditions: " + testRequestDevicePresenceCheck + " for " + deviceList.size()
+				log.info("Inside Conditions: " + testRequestDevicePresenceCheck + " for " + bridgeLMNWiredImpl.getDeviceList().size()
 						+ " devices");
-				hdlcFrameCheckDevicesInList = new HdlcFrameCheckDevicesInList((byte) timeSlots, deviceList);
+				hdlcFrameCheckDevicesInList = new HdlcFrameCheckDevicesInList((byte) timeSlots, bridgeLMNWiredImpl.getDeviceList());
 				
 				bridgeLMNWiredImpl.deactivateSerialDataListener();
 
@@ -200,7 +189,7 @@ public class PackageHandler {
 				
 				dataRequestInProgress = true;
 				
-				serviceDataRequestTimout.schedule(runnableDataRequestEnd, 20, TimeUnit.MILLISECONDS);
+				serviceDataRequestTimout.schedule(runnableDataRequestEnd, 23, TimeUnit.MILLISECONDS);
 			}
 
 		}
@@ -209,11 +198,14 @@ public class PackageHandler {
 
 	protected void startServiceHandler() {
 		// Live
+		
+		//TODO: Activate again
 		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 10, TimeUnit.SECONDS);
 		service.scheduleAtFixedRate(runnableCheckDevicePresence, 5, 10, TimeUnit.SECONDS);
 		service.scheduleAtFixedRate(runnableDataRequest, 0, 127, TimeUnit.MILLISECONDS);
 
 		// Testing
+//		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 200, TimeUnit.MILLISECONDS);
 //				service.schedule(runnableInviteNewDevices, 0,TimeUnit.SECONDS);
 //				service.schedule(runnableCheckDevicePresence, 5, TimeUnit.SECONDS);
 //				service.scheduleAtFixedRate(runnableTestDataRequest, 0, 1, TimeUnit.SECONDS);
@@ -225,10 +217,10 @@ public class PackageHandler {
 
 	public boolean clearSilentDevices() {
 		boolean deviceRemoved = false;
-		if (!deviceList.isEmpty())
-			for (Device tmpDevice : deviceList) {
+		if (!bridgeLMNWiredImpl.getDeviceList().isEmpty())
+			for (Device tmpDevice : bridgeLMNWiredImpl.getDeviceList()) {
 				if (!tmpDevice.isPresent()) {
-					deviceList.remove(tmpDevice);
+					bridgeLMNWiredImpl.getDeviceList().remove(tmpDevice);
 					deviceRemoved = true;
 				}
 			}

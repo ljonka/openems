@@ -74,6 +74,10 @@ public class LMNWiredTask {
 	 * @param hdlcFrame Raw Data Frame
 	 */
 	public void setResponse(HdlcFrame hdlcFrame) {
+		
+		if(new String(hdlcFrame.getData()).contains("NO DATA")) {
+			return;
+		}
 
 		Channel<Float> channel = abstractOpenEmsLMNWiredComponent.channel(channelId);
 		String[] arrData = new String(hdlcFrame.getData()).split("\\*");
