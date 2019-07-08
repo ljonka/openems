@@ -87,7 +87,7 @@ public class PackageHandler {
 
 			if (!isAddressingInProgress() && !isCheckupInProgress() && !isDataRequestInProgress()) {
 				
-				bridgeLMNWiredImpl.deactivateSerialDataListener();
+//				bridgeLMNWiredImpl.deactivateSerialDataListener();
 
 				// Noch kein Teilnehmer vorhanden
 				if (bridgeLMNWiredImpl.getDeviceList().isEmpty()) {
@@ -95,7 +95,7 @@ public class PackageHandler {
 					serialPort.writeBytes(hdlcFrameAddressingOnEmptyList.getBytes(),
 							hdlcFrameAddressingOnEmptyList.getLength());
 				} else { // Mindestens 1 Teilnehmer vorhanden
-					log.info(testRequestDevicesWithExisting);
+					log.info(testRequestDevicesWithExisting + bridgeLMNWiredImpl.getDeviceList().size());
 
 					hdlcFrameAddressingOnDevicesInList = new HdlcFrameAddressingOnDevicesInList((byte) timeSlots,
 							bridgeLMNWiredImpl.getDeviceList());
@@ -104,7 +104,7 @@ public class PackageHandler {
 							hdlcFrameAddressingOnDevicesInList.getLength());
 				}
 
-				bridgeLMNWiredImpl.activateSerialDataListener();
+//				bridgeLMNWiredImpl.activateSerialDataListener();
 
 				setTimeStampAddressing();
 
@@ -137,7 +137,7 @@ public class PackageHandler {
 						+ " devices");
 				hdlcFrameCheckDevicesInList = new HdlcFrameCheckDevicesInList((byte) timeSlots, bridgeLMNWiredImpl.getDeviceList());
 				
-				bridgeLMNWiredImpl.deactivateSerialDataListener();
+//				bridgeLMNWiredImpl.deactivateSerialDataListener();
 
 				if (serialPort.isOpen())
 					serialPort.writeBytes(hdlcFrameCheckDevicesInList.getBytes(),
@@ -146,7 +146,7 @@ public class PackageHandler {
 					log.info("Error: Serial Port is not available.");
 				}
 
-				bridgeLMNWiredImpl.activateSerialDataListener();
+//				bridgeLMNWiredImpl.activateSerialDataListener();
 
 				setTimeStampCheckPresence();
 
@@ -182,14 +182,18 @@ public class PackageHandler {
 				log.info("Request obis data for device");
 				
 				currentDataRequestTask.timeOutOccured = true;
+				
+//				bridgeLMNWiredImpl.deactivateSerialDataListener();
 
 				serialPort.writeBytes(currentDataRequestTask.getHdlcData(), currentDataRequestTask.getHdlcDataLength());
+				
+//				bridgeLMNWiredImpl.activateSerialDataListener();
 
 				setTimeStampLastDataRequest();
 				
 				dataRequestInProgress = true;
 				
-				serviceDataRequestTimout.schedule(runnableDataRequestEnd, 23, TimeUnit.MILLISECONDS);
+				serviceDataRequestTimout.schedule(runnableDataRequestEnd, 100, TimeUnit.MILLISECONDS);
 			}
 
 		}
@@ -200,9 +204,9 @@ public class PackageHandler {
 		// Live
 		
 		//TODO: Activate again
-		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 10, TimeUnit.SECONDS);
-		service.scheduleAtFixedRate(runnableCheckDevicePresence, 5, 10, TimeUnit.SECONDS);
-		service.scheduleAtFixedRate(runnableDataRequest, 0, 127, TimeUnit.MILLISECONDS);
+		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 5, TimeUnit.SECONDS);
+		service.scheduleAtFixedRate(runnableCheckDevicePresence, 2, 5, TimeUnit.SECONDS);
+//		service.scheduleAtFixedRate(runnableDataRequest, 0, 200, TimeUnit.MILLISECONDS);
 
 		// Testing
 //		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 200, TimeUnit.MILLISECONDS);

@@ -74,6 +74,8 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 	@Reference
 	protected ConfigurationAdmin cm;
+	
+	private boolean serialDataListenerActive = false;
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		;
@@ -125,7 +127,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 	protected void deactivate() {
 		super.deactivate();
 		addressing.shutdown();
-		serialPort.removeDataListener();
+		deactivateSerialDataListener();
 		serialPort.closePort();
 		worker.deactivate();
 	}
@@ -178,12 +180,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 	 */
 	public void activateSerialDataListener() {
 
-		if (!serialPort.isOpen()) {
-			log.info("SerialPort not available.");
-			return;
-		}
-
-		serialPort.addDataListener(new SerialPortDataListener() {
+		serialDataListenerActive = serialPort.addDataListener(new SerialPortDataListener() {
 			@Override
 			public int getListeningEvents() {
 				return SerialPort.LISTENING_EVENT_DATA_RECEIVED;
