@@ -219,6 +219,10 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 				}
 			}
 		});
+		
+		if(serialDataListenerActive) {
+			log.info("Serial DataListener started.");
+		}
 	}
 	
 	public void deactivateSerialDataListener() {
@@ -248,7 +252,6 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 					}
 					if (!deviceInList) { // Finally add to list
 						deviceList.add(device);
-						updateConfigDevices();
 					}
 				} else { // in guard time, ignore package
 					log.debug("HDLC Frame is new device data but in guard time!");
@@ -258,14 +261,14 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 				log.info("HDLC Frame presence check response");				
 				Device device = new Device(hdlcFrame.getSource(), Arrays.copyOfRange(hdlcFrame.getData(), 2, 16));
 				
+				log.info(new String(device.getSerialNumber()));
+				
 				for (Device tmpDevice : deviceList) {
 					if (tmpDevice.getHdlcAddress() == device.getHdlcAddress()) {
 						if (!Arrays.equals(tmpDevice.getSerialNumber(), device.getSerialNumber())) {
 							tmpDevice.setSerialNumber(device.getSerialNumber());
 						}
 						tmpDevice.setPresent();
-						
-						log.info(new String(device.getSerialNumber()));
 					}
 				}
 

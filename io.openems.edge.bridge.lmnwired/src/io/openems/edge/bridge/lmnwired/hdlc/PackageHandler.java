@@ -120,9 +120,8 @@ public class PackageHandler {
 
 		public void run() {
 			presenceCheckInProgress = false;
-			if(clearSilentDevices()) {
-				bridgeLMNWiredImpl.updateConfigDevices();
-			}
+			clearSilentDevices();
+			//bridgeLMNWiredImpl.updateConfigDevices();
 		}
 	};
 
@@ -204,9 +203,9 @@ public class PackageHandler {
 		// Live
 		
 		//TODO: Activate again
-		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 5, TimeUnit.SECONDS);
-		service.scheduleAtFixedRate(runnableCheckDevicePresence, 2, 5, TimeUnit.SECONDS);
-//		service.scheduleAtFixedRate(runnableDataRequest, 0, 200, TimeUnit.MILLISECONDS);
+		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 30, TimeUnit.SECONDS);
+		service.scheduleAtFixedRate(runnableCheckDevicePresence, 15, 30, TimeUnit.SECONDS);
+		service.scheduleAtFixedRate(runnableDataRequest, 0, 200, TimeUnit.MILLISECONDS);
 
 		// Testing
 //		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 200, TimeUnit.MILLISECONDS);
