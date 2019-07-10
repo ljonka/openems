@@ -287,7 +287,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 						}
 					}
 					if (!deviceInList) { // Finally add to list
-//						deviceList.add(device);
+						deviceList.add(device);
 					}
 				} else { // in guard time, ignore package
 					log.debug("HDLC Frame is new device data but in guard time!");

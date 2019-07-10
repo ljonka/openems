@@ -85,7 +85,8 @@ public class PackageHandler {
 
 			if (!isAddressingInProgress() && !isCheckupInProgress()) {
 
-				bridgeLMNWiredImpl.deactivateSerialDataListener();				
+				bridgeLMNWiredImpl.deactivateSerialDataListener();
+				bridgeLMNWiredImpl.activateSerialDataListener();
 
 				// Noch kein Teilnehmer vorhanden
 				if (bridgeLMNWiredImpl.getDeviceList().isEmpty()) {
@@ -106,8 +107,6 @@ public class PackageHandler {
 							hdlcFrameAddressingOnDevicesInList.getLength());
 				}
 				
-				bridgeLMNWiredImpl.activateSerialDataListener();
-
 				bridgeLMNWiredImpl.resetCurrentPackage();
 
 				setTimeStampAddressing();
@@ -136,7 +135,7 @@ public class PackageHandler {
 
 			if (!bridgeLMNWiredImpl.getDeviceList().isEmpty() && !isCheckupInProgress() && !isAddressingInProgress()) {
 
-				log.info("Inside Conditions: " + testRequestDevicePresenceCheck + " for "
+				log.info("Inside Condition30s: " + testRequestDevicePresenceCheck + " for "
 						+ bridgeLMNWiredImpl.getDeviceList().size() + " devices");
 				hdlcFrameCheckDevicesInList = new HdlcFrameCheckDevicesInList((byte) timeSlots,
 						bridgeLMNWiredImpl.getDeviceList());
@@ -192,17 +191,6 @@ public class PackageHandler {
 
 	};
 
-	// Get Data from Device
-	Runnable runnableRestSerialDataListener = new Runnable() {
-
-		public void run() {
-
-			bridgeLMNWiredImpl.deactivateSerialDataListener();
-			bridgeLMNWiredImpl.activateSerialDataListener();
-		}
-
-	};
-
 	public LMNWiredTask getCurrentTask() {
 		return currentDataRequestTask;
 	}
@@ -211,9 +199,9 @@ public class PackageHandler {
 		// Live
 
 		// TODO: Activate again
-		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 4, TimeUnit.SECONDS);
-//		service.scheduleAtFixedRate(runnableCheckDevicePresence, 5, 10, TimeUnit.SECONDS);
-//		service.scheduleAtFixedRate(runnableDataRequest, 0, 200, TimeUnit.MILLISECONDS);
+		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 30, TimeUnit.SECONDS);
+		service.scheduleAtFixedRate(runnableCheckDevicePresence, 15, 30, TimeUnit.SECONDS);
+		service.scheduleAtFixedRate(runnableDataRequest, 0, 200, TimeUnit.MILLISECONDS);
 //		
 
 		// Testing
