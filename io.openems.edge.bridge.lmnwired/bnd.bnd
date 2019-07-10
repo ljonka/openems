@@ -8,17 +8,18 @@ Bundle-Description: Bridge Implementation for metering data exchange
 Export-Package: \
 	io.openems.edge.bridge.lmnwired.api,\
 	io.openems.edge.bridge.lmnwired.api.task,\
-	io.openems.edge.bridge.lmnwired
+	io.openems.edge.bridge.lmnwired,\
+	io.openems.edge.bridge.lmnwired.hdlc
 
 
 -includeresource: {readme.md}
 
 -buildpath: \
 	osgi.enroute.base.api;version=2.1,\
-	org.gurux:gurux.dlms,\
 	com.fazecast.jSerialComm,\
 	io.openems.edge.common,\
-	io.openems.common
+	io.openems.common,\
+	io.openems.edge.meter.api
 
 -testpath: \
 	osgi.enroute.junit.wrapper;version=4.12, \
@@ -26,5 +27,8 @@ Export-Package: \
 
 Bundle-Name: LMN Wired Bridge
 -runrequires: \
-	bnd.identity;version='2.2.27';id='org.gurux:gurux.dlms',\
-	bnd.identity;version='2.5.1';id='com.fazecast.jSerialComm'
+	bnd.identity;version='2.5.1';id='com.fazecast.jSerialComm',\
+	bnd.identity;version='1.6.0';id='org.openmuc.jdlms',\
+	bnd.identity;version='1.10.0';id='org.openmuc.jasn1',\
+	bnd.identity;version='1.0.1';id='org.openmuc.jrxtx',\
+	bnd.identity;version='1.3.0';id='org.openmuc.jasn1-ber'

@@ -1,35 +1,46 @@
 package io.openems.edge.bridge.lmnwired;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.math.RoundingMode;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Dictionary;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
+import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.event.Event;
 import org.osgi.service.event.EventConstants;
 import org.osgi.service.event.EventHandler;
+import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.fazecast.jSerialComm.SerialPort;
+import com.fazecast.jSerialComm.SerialPortDataListener;
+import com.fazecast.jSerialComm.SerialPortEvent;
 
 import io.openems.common.worker.AbstractCycleWorker;
 import io.openems.edge.bridge.lmnwired.api.BridgeLMNWired;
+import io.openems.edge.bridge.lmnwired.api.Device;
 import io.openems.edge.bridge.lmnwired.api.task.LMNWiredTask;
+import io.openems.edge.bridge.lmnwired.hdlc.PackageHandler;
+import io.openems.edge.bridge.lmnwired.hdlc.HdlcFrame;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.event.EdgeEventConstants;
-
-import org.osgi.service.metatype.annotations.Designate;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(name = "io.openems.edge.bridge.lmnwired", //
@@ -43,28 +54,28 @@ import org.osgi.service.metatype.annotations.Designate;
 public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		implements BridgeLMNWired, OpenemsComponent, EventHandler {
 
-	ScheduledExecutorService service;
-
-	SerialPort comPort;
-	private static SlaveManager sm = new SlaveManager(); // neuer Slavemanager: 0 Teilnehmer & leere Teilnehmerliste
-	private static PayloadManager pm = new PayloadManager(); // neuer Payloadmanager
+	SerialPort serialPort;
 
 	private final Logger log = LoggerFactory.getLogger(BridgeLMNWiredImpl.class);
 
 	private final LMNWiredWorker worker = new LMNWiredWorker();
 	private final Map<String, LMNWiredTask> tasks = new HashMap<>();
 
-	private static List<TimerStartEvent> listeners1 = new ArrayList<TimerStartEvent>();
+	private PackageHandler addressing;
 
-	protected int registeredDevices = 0;
+	private byte currentPackage[];
 
-	private static String messageType;
-	private static BridgeLMNWiredImpl bridgeLMNWiredImpl = new BridgeLMNWiredImpl();
+	long receiveTimeMeasure;
+	int timeslotsTime;
+	int timeslots;
+	int timeSlotDurationInMs;
+	NumberFormat numberFormat = new DecimalFormat("0.0");
+	Config config;
 
-	private static int timeslots = 32;
-	private static int timeslotLength = 10; // Später zu 5 ändern
+	@Reference
+	protected ConfigurationAdmin cm;
 
-	private static long time = 0;
+	private boolean serialDataListenerActive = false;
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		;
@@ -83,10 +94,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 	public BridgeLMNWiredImpl() {
 		super(//
-				OpenemsComponent.ChannelId.values(), //
-				BridgeLMNWired.ChannelId.values(), //
-				ChannelId.values() //
-		);
+				OpenemsComponent.ChannelId.values());
 	}
 
 	@Activate
@@ -94,65 +102,34 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		super.activate(context, config.id(), config.alias(), config.enabled());
 
 		this.worker.activate(config.id());
+		this.config = config;
 
-		comPort = SerialPort.getCommPort(config.portName());
-		if (comPort == null) {
-			log.debug("Serial Port not found.");
-			return;
-		}
-		comPort.setNumDataBits(8);
-		comPort.setNumStopBits(1);
-		comPort.setParity(0);
-		comPort.setBaudRate(config.baudRate());
-		comPort.openPort();
+		serialPort = SerialPort.getCommPort(config.portName());
 
-		new PortManager(comPort, sm, this);
+		serialPort.setNumDataBits(8);
+		serialPort.setNumStopBits(1);
+		serialPort.setParity(0);
+		serialPort.setBaudRate(config.baudRate());
+		serialPort.openPort();
 
-		// Sende Broadcast Adressvergabe
-		Runnable runnableInviteNewDevices = new Runnable() {
+		timeslotsTime = config.timeSlots() * 2 * config.timeSlotDurationInMs();
+		timeslots = config.timeSlots();
+		timeSlotDurationInMs = config.timeSlotDurationInMs();
 
-			public void run() {
+		numberFormat.setRoundingMode(RoundingMode.DOWN);
 
-				log.info("Sende Broadcast Adressvergabe");
+		activateSerialDataListener();
 
-				// Noch kein Teilnehmer vorhanden
-				if (registeredDevices <= 0) {
-					BroadcastAddressRequest1();
-				} else { // Mindestens 1 Teilnehmer vorhanden
-					BroadcastAddressRequest2();
-				}
-
-			}
-
-		};
-
-		// Sende Broadcast Adressprüfung
-		Runnable runnableCheckDevicePresence = new Runnable() {
-
-			public void run() {
-
-				log.info("Sende Broadcast Adressprüfung");
-
-				if (registeredDevices > 0) {
-					BroadcastAddressCheck();
-				}
-
-			}
-
-		};
-
-		service = Executors.newSingleThreadScheduledExecutor();
-
-		service.scheduleAtFixedRate(runnableInviteNewDevices, 15, 30, TimeUnit.SECONDS);
-		service.scheduleAtFixedRate(runnableCheckDevicePresence, 0, 30, TimeUnit.SECONDS);
+		addressing = new PackageHandler(serialPort, config.timeSlots(), timeslotsTime, this);
 	}
 
 	@Deactivate
 	protected void deactivate() {
 		super.deactivate();
-		comPort.closePort();
+		addressing.shutdown();
+		deactivateSerialDataListener();
+		serialPort.closePort();
 		worker.deactivate();
-		service.shutdown();
 	}
 
 	@Override
@@ -174,11 +151,6 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		this.tasks.remove(sourceId);
 	}
 
-	@Override
-	public SerialPort getSerialConnection() {
-		return comPort;
-	}
-
 	private class LMNWiredWorker extends AbstractCycleWorker {
 
 		@Override
@@ -193,68 +165,161 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 		@Override
 		protected void forever() {
-			if (!comPort.isOpen()) {
-				comPort.openPort();
-			}
 
 			for (LMNWiredTask task : tasks.values()) {
-				Object data = null;
-				data = task.getRequest();
-				task.setResponse(data);
+				task.getRequest();
 			}
 
-			comPort.closePort();
 		}
 	}
 
-	public String getMessageType() {
-		return messageType;
-	}
+	/**
+	 * Activate data listener for incoming packages
+	 * 
+	 * @param serialPort
+	 */
+	public void activateSerialDataListener() {
 
-	public int getTimeslots() {
-		return timeslots;
-	}
+		serialDataListenerActive = serialPort.addDataListener(new SerialPortDataListener() {
+			@Override
+			public int getListeningEvents() {
+				return SerialPort.LISTENING_EVENT_DATA_RECEIVED;
+			}
 
-	public long getTime() {
-		return time;
-	}
+			@Override
+			public void serialEvent(SerialPortEvent event) {
 
-	public void Event1_Timer() {
-		time = System.currentTimeMillis();
+				byte[] newData = event.getReceivedData();
 
-		for (TimerStartEvent e : listeners1) {
-			e.startTimer(messageType, sm, this);
-			break;
+				// Lookup start or end byte flag 0x7e
+				if (newData[0] == 0x7e) { // means start
+					// Measure Time
+					receiveTimeMeasure = addressing.setTimeStampAddressingEnd();
+					currentPackage = newData;
+					if (newData[newData.length - 1] == 0x7e) { // For Short Package including start and end in one
+						handleReturn(currentPackage, receiveTimeMeasure);
+					}
+				} else if (newData[newData.length - 1] == 0x7e) { // means end
+					ByteArrayOutputStream concatData = new ByteArrayOutputStream();
+					try {
+						concatData.write(currentPackage);
+						concatData.write(newData);
+						handleReturn(concatData.toByteArray(), receiveTimeMeasure);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				} else {
+					ByteArrayOutputStream concatData = new ByteArrayOutputStream();
+					try {
+						concatData.write(currentPackage);
+						concatData.write(newData);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		});
+
+		if (serialDataListenerActive) {
+			log.info("Serial DataListener started.");
 		}
 	}
 
-	public int getTimeslotLength() {
-		return timeslotLength;
+	public void deactivateSerialDataListener() {
+		serialPort.removeDataListener();
 	}
 
-	// Broadcast zur Adressvergabe, noch kein Teilnehmer vorhanden
-	public static void BroadcastAddressRequest1() {
-		System.out.println("\n---0s: Broadcast Adressvergabe (0 Teilnehmer):");
-		messageType = "request";
-		Frame frame1 = new Frame("AddressRequest1", timeslots, "", "");
-		PortManager.setPortData(frame1.getFrameTyp1());
-		bridgeLMNWiredImpl.Event1_Timer();
+	protected void handleReturn(byte data[], long receiveTimeMeasure) {
+		HdlcFrame hdlcFrame = HdlcFrame.createHdlcFrameFromByte(data);
+		if (hdlcFrame != null) {
+//			log.debug("HDLC Frame received, party hard!");
+			long timeDiff = receiveTimeMeasure - addressing.getTimeStampAddressing();
+			long usedTimeSlotBeta = (timeDiff - addressing.getTimeStampAddressing() + timeSlotDurationInMs)
+					/ (2 * timeSlotDurationInMs);
+			double usedTimeSlot = Math.floor(usedTimeSlotBeta);
+			double tmpTimeSlotFactor = usedTimeSlotBeta - usedTimeSlot;
+			if (addressing.isAddressingInProgress()) {
+				if (tmpTimeSlotFactor <= 0.5) { // in data time window
+					log.info("HDLC Frame is new device data!");
+					// Add device to List
+					Device device = new Device(hdlcFrame.getSource(), Arrays.copyOfRange(hdlcFrame.getData(), 2, 16));
+					// Check if device is already in list
+					boolean deviceInList = false;
+					for (Device tmpDevice : deviceList) {
+						if (tmpDevice.getHdlcAddress() == device.getHdlcAddress()) {
+							deviceInList = true;
+						}
+					}
+					if (!deviceInList) { // Finally add to list
+						deviceList.add(device);
+					}
+				} else { // in guard time, ignore package
+					log.debug("HDLC Frame is new device data but in guard time!");
+				}
+
+			} else if (addressing.isCheckupInProgress()) {
+				log.info("HDLC Frame presence check response");
+				Device device = new Device(hdlcFrame.getSource(), Arrays.copyOfRange(hdlcFrame.getData(), 2, 16));
+
+				log.info(new String(device.getSerialNumber()));
+
+				for (Device tmpDevice : deviceList) {
+					if (tmpDevice.getHdlcAddress() == device.getHdlcAddress()) {
+						if (!Arrays.equals(tmpDevice.getSerialNumber(), device.getSerialNumber())) {
+							tmpDevice.setSerialNumber(device.getSerialNumber());
+						}
+						tmpDevice.setPresent();
+					}
+				}
+
+			} else {
+				log.info("HDLC Frame is data");
+
+				// Lookup device task for received data
+				for (Device tmpDevice : deviceList) {
+//					log.info("Search device");
+					LMNWiredTask currentTask = addressing.getCurrentTask();
+					if (tmpDevice.getHdlcAddress() == hdlcFrame.getSource() && currentTask.getDevice() == tmpDevice
+							&& new String(hdlcFrame.getData()).contains(currentTask.getObis())) {
+//						log.info("task found");
+						currentTask.setResponse(hdlcFrame);
+					}
+				}
+
+			}
+		} else {
+			log.debug("HDLC Frame received, check HCS or FCS");
+		}
 	}
 
-	// Broadcast zur Adressvergabe, mindestens 1 Teilnehmer vorhanden
-	public static void BroadcastAddressRequest2() {
-		System.out.println("\n---30s: Broadcast Adressvergabe (mehr als 0 Teilnehmer):");
-		Frame frame1 = new Frame("AddressRequest2", timeslots, "", (pm.getPayloadBroadcast(sm)).toString());
-		messageType = "request";
-		PortManager.setPortData(frame1.getFrameTyp2());
-		bridgeLMNWiredImpl.Event1_Timer();
+	public PackageHandler getAddressing() {
+		return addressing;
 	}
-	
-	public static void BroadcastAddressCheck() {
-		Frame frame1 = new Frame("AddressCheckB", timeslots, "", (pm.getPayloadBroadcast(sm)).toString());
-		messageType = "check";
-		PortManager.setPortData(frame1.getFrameTyp2());
-		bridgeLMNWiredImpl.Event1_Timer();
+
+	@Override
+	public SerialPort getSerialConnection() {
+		return serialPort;
+	}
+
+	@Override
+	public List<Device> getDeviceList() {
+		return deviceList;
+	}
+
+	public void updateConfigDevices() {
+		ArrayList<String> configDevices = new ArrayList<String>();
+		for (Device tmpDevice : deviceList) {
+			configDevices.add(new String(tmpDevice.getSerialNumber()));
+		}
+		Dictionary<String, ArrayList<String>> map = new Hashtable<String, ArrayList<String>>();
+		map.put("devices", configDevices);
+		try {
+			cm.getConfiguration(this.servicePid()).update(map);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			log.info(e.getMessage());
+		}
 	}
 
 }

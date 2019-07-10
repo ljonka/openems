@@ -21,7 +21,16 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	String portName() default "/dev/ttyUSB0";
 
 	@AttributeDefinition(name = "Baudrate", description = "The baudrate - e.g. 9600, 19200, 38400, 57600 or 115200")
-	int baudRate() default 650000;
-
+	int baudRate() default 460800;
+	
+	@AttributeDefinition(name = "TimeSlots", description = "Timeslots for device addressing, eg. 32")
+	byte timeSlots() default 32;
+	
+	@AttributeDefinition(name = "TimeSlotDuration in ms", description = "Timeslot duration for device addressing, eg. 5")
+	byte timeSlotDurationInMs() default 5;
+	
+	@AttributeDefinition(name = "Devices", description = "Current Devices in list")
+	String[] devices() default {};
+	
 	String webconsole_configurationFactory_nameHint() default "Bridge LMN wired [{id}]";
 }
