@@ -1,10 +1,6 @@
 package io.openems.edge.bridge.lmnwired.api;
 
 import java.io.ByteArrayOutputStream;
-import java.util.LinkedList;
-import java.util.Queue;
-
-import io.openems.edge.bridge.lmnwired.api.task.LMNWiredTask;
 
 /**
  * Device Data for HDLC Layer
@@ -19,23 +15,10 @@ public class Device {
 	private byte responseData[];
 	private byte status[] = new byte[] { 0x00, 0x00 };
 	private boolean devicePresent = true;
-	protected Queue<LMNWiredTask> dataRequestQueue = new LinkedList<LMNWiredTask>();
 
 	public Device(byte hdlcAddress, byte[] serialNumber) {
 		this.hdlcAddress = hdlcAddress;
 		this.serialNumber = serialNumber;
-	}
-
-	public LMNWiredTask getFirstTask() {
-		return dataRequestQueue.poll();
-	}
-	
-	public Queue<LMNWiredTask> getDataRequestQueue(){
-		return dataRequestQueue;
-	}
-
-	public void addTask(LMNWiredTask task) {
-		dataRequestQueue.add(task);
 	}
 
 	public byte getHdlcAddress() {

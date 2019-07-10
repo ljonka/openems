@@ -17,6 +17,7 @@ public class LMNWiredTask {
 	protected BridgeLMNWired bridgeLMNWired;
 	Device device;
 	String obisPart;
+	String obis;
 	String serialNumber;
 	byte hdlcData[];
 	int hdlcDataLength;
@@ -24,6 +25,7 @@ public class LMNWiredTask {
 	int millisForTimeout = 5;
 	private final Logger log = LoggerFactory.getLogger(LMNWiredTask.class);
 	public boolean timeOutOccured = true;
+	Float fData;
 
 	public LMNWiredTask(AbstractOpenEmsLMNWiredComponent abstractOpenEmsLMNWiredComponent,
 			BridgeLMNWired bridgeLMNWired, String serialNumber, String obisPart, SymmetricMeter.ChannelId channelId) {
@@ -45,6 +47,10 @@ public class LMNWiredTask {
 	public int getHdlcDataLength() {
 		return hdlcDataLength;
 	}
+	
+	public String getObis() {
+		return obis;
+	}
 
 	public boolean getRequest() {
 
@@ -52,8 +58,9 @@ public class LMNWiredTask {
 			for (Device tmpDevice : bridgeLMNWired.getDeviceList()) {
 				if (new String(tmpDevice.getSerialNumber()).equals(serialNumber)) {
 					device = tmpDevice;
+					obis = new String(device.getBytesForObisRequest(obisPart));
 
-					log.info("Reqeust Data for channel: " + obisPart);
+					log.info("Reqeust Data for channel: " + obisPart);					
 
 					HdlcFrameDeviceDataRequest hdlcFrameDeviceDataRequest = new HdlcFrameDeviceDataRequest(device,
 							obisPart);
@@ -61,7 +68,6 @@ public class LMNWiredTask {
 					hdlcDataLength = hdlcFrameDeviceDataRequest.getLength();
 					bridgeLMNWired.getAddressing().addHdlcDataRequest(this);
 
-					device.addTask(this);
 					return true;
 				}
 			}
@@ -74,18 +80,21 @@ public class LMNWiredTask {
 	 * @param hdlcFrame Raw Data Frame
 	 */
 	public void setResponse(HdlcFrame hdlcFrame) {
+
+		Channel<Float> channel = abstractOpenEmsLMNWiredComponent.channel(channelId);
+		String tmpString = new String(hdlcFrame.getData()).replace(obis + ";","");
+		String[] arrData = tmpString.split("\\*");
 		
-		if(new String(hdlcFrame.getData()).contains("NO DATA")) {
+		try {
+			fData = (Float.parseFloat(arrData[0])) * 1000;
+		} catch (Exception e) {
+			log.info(tmpString);
 			return;
 		}
 
-		Channel<Float> channel = abstractOpenEmsLMNWiredComponent.channel(channelId);
-		String[] arrData = new String(hdlcFrame.getData()).split("\\*");
-		Float fData = (Float.parseFloat(arrData[0])) * 1000;
-		
 		log.info("Set channel data: " + fData);
 		log.info("For device: " + new String(device.getSerialNumber()));
-		log.info("For channel: " + obisPart);		
+		log.info("For channel: " + obisPart);
 
 		channel.setNextValue(fData);
 	}

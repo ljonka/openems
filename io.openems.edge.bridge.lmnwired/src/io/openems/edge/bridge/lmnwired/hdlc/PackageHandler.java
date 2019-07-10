@@ -29,7 +29,6 @@ public class PackageHandler {
 	private ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
 	private ScheduledExecutorService serviceAddressingEnd = Executors.newSingleThreadScheduledExecutor();
 	private ScheduledExecutorService servicePresenceCheckEnd = Executors.newSingleThreadScheduledExecutor();
-	private ScheduledExecutorService serviceDataRequestTimout = Executors.newSingleThreadScheduledExecutor();
 	private final Logger log = LoggerFactory.getLogger(PackageHandler.class);
 	private String testRequestDevicesOnZero = "Request device registration with zero devices in list.";
 	private String testRequestDevicesWithExisting = "Request device registration with devices in list.";
@@ -41,12 +40,10 @@ public class PackageHandler {
 	protected long timeStampAddressingEnd;
 	protected long timeStampCheckPresence = 0;
 	protected long timeStampCheckPresenceEnd;
-	protected long timeStampLastDataRequest = 0;
 	protected int timeslotsTime;
 	protected int timeSlots;
 	protected boolean addressingInProgress = false;
 	protected boolean presenceCheckInProgress = false;
-	protected boolean dataRequestInProgress = false;
 	protected Queue<LMNWiredTask> dataRequestQueue = new LinkedList<LMNWiredTask>();
 	protected LMNWiredTask currentDataRequestTask;
 
@@ -85,9 +82,10 @@ public class PackageHandler {
 	Runnable runnableInviteNewDevices = new Runnable() {
 		public void run() {
 
-			if (!isAddressingInProgress() && !isCheckupInProgress() && !isDataRequestInProgress()) {
+			if (!isAddressingInProgress() && !isCheckupInProgress()) {
 				
-//				bridgeLMNWiredImpl.deactivateSerialDataListener();
+				bridgeLMNWiredImpl.deactivateSerialDataListener();
+				bridgeLMNWiredImpl.activateSerialDataListener();
 
 				// Noch kein Teilnehmer vorhanden
 				if (bridgeLMNWiredImpl.getDeviceList().isEmpty()) {
@@ -104,7 +102,6 @@ public class PackageHandler {
 							hdlcFrameAddressingOnDevicesInList.getLength());
 				}
 
-//				bridgeLMNWiredImpl.activateSerialDataListener();
 
 				setTimeStampAddressing();
 
@@ -130,13 +127,14 @@ public class PackageHandler {
 
 		public void run() {
 
-			if (!bridgeLMNWiredImpl.getDeviceList().isEmpty() && !isCheckupInProgress() && !isAddressingInProgress() && !isDataRequestInProgress()) {
+			if (!bridgeLMNWiredImpl.getDeviceList().isEmpty() && !isCheckupInProgress() && !isAddressingInProgress()) {
 
 				log.info("Inside Conditions: " + testRequestDevicePresenceCheck + " for " + bridgeLMNWiredImpl.getDeviceList().size()
 						+ " devices");
 				hdlcFrameCheckDevicesInList = new HdlcFrameCheckDevicesInList((byte) timeSlots, bridgeLMNWiredImpl.getDeviceList());
 				
-//				bridgeLMNWiredImpl.deactivateSerialDataListener();
+				bridgeLMNWiredImpl.deactivateSerialDataListener();
+				bridgeLMNWiredImpl.activateSerialDataListener();
 
 				if (serialPort.isOpen())
 					serialPort.writeBytes(hdlcFrameCheckDevicesInList.getBytes(),
@@ -144,8 +142,6 @@ public class PackageHandler {
 				else {
 					log.info("Error: Serial Port is not available.");
 				}
-
-//				bridgeLMNWiredImpl.activateSerialDataListener();
 
 				setTimeStampCheckPresence();
 
@@ -159,22 +155,12 @@ public class PackageHandler {
 	};
 
 	// Get Data from Device
-	Runnable runnableDataRequestEnd = new Runnable() {
-
-		public void run() {
-			timeOutLastDataRequest();
-			dataRequestInProgress = false;
-		}
-
-	};
-
-	// Get Data from Device
 	Runnable runnableDataRequest = new Runnable() {
 
 		public void run() {
 
 			if (!bridgeLMNWiredImpl.getDeviceList().isEmpty() && !dataRequestQueue.isEmpty() && !isCheckupInProgress()
-					&& !isAddressingInProgress() && !isDataRequestInProgress() && !isDataRequestInProgress()) {
+					&& !isAddressingInProgress()) {
 
 				currentDataRequestTask = dataRequestQueue.poll();
 
@@ -187,24 +173,23 @@ public class PackageHandler {
 				serialPort.writeBytes(currentDataRequestTask.getHdlcData(), currentDataRequestTask.getHdlcDataLength());
 				
 //				bridgeLMNWiredImpl.activateSerialDataListener();
-
-				setTimeStampLastDataRequest();
 				
-				dataRequestInProgress = true;
-				
-				serviceDataRequestTimout.schedule(runnableDataRequestEnd, 100, TimeUnit.MILLISECONDS);
 			}
 
 		}
 
 	};
+	
+	public LMNWiredTask getCurrentTask() {
+		return currentDataRequestTask;
+	}
 
 	protected void startServiceHandler() {
 		// Live
 		
 		//TODO: Activate again
-		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 30, TimeUnit.SECONDS);
-		service.scheduleAtFixedRate(runnableCheckDevicePresence, 15, 30, TimeUnit.SECONDS);
+		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 10, TimeUnit.SECONDS);
+		service.scheduleAtFixedRate(runnableCheckDevicePresence, 5, 10, TimeUnit.SECONDS);
 		service.scheduleAtFixedRate(runnableDataRequest, 0, 200, TimeUnit.MILLISECONDS);
 
 		// Testing
@@ -231,19 +216,9 @@ public class PackageHandler {
 		return deviceRemoved;
 	}
 
-	public void timeOutLastDataRequest() {
-		if (currentDataRequestTask.timeOutOccured) 
-			currentDataRequestTask.getDevice().getFirstTask();
-	}
-
 	public long setTimeStampAddressing() {
 		timeStampAddressing = System.nanoTime();
 		return timeStampAddressing;
-	}
-
-	public long setTimeStampLastDataRequest() {
-		timeStampLastDataRequest = System.nanoTime();
-		return timeStampLastDataRequest;
 	}
 
 	public long getTimeStampAddressing() {
@@ -279,10 +254,6 @@ public class PackageHandler {
 
 	public boolean isCheckupInProgress() {
 		return presenceCheckInProgress;
-	}
-
-	public boolean isDataRequestInProgress() {
-		return dataRequestInProgress;
 	}
 
 }

@@ -74,7 +74,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 	@Reference
 	protected ConfigurationAdmin cm;
-	
+
 	private boolean serialDataListenerActive = false;
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
@@ -117,7 +117,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		timeSlotDurationInMs = config.timeSlotDurationInMs();
 
 		numberFormat.setRoundingMode(RoundingMode.DOWN);
-		
+
 		activateSerialDataListener();
 
 		addressing = new PackageHandler(serialPort, config.timeSlots(), timeslotsTime, this);
@@ -188,7 +188,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 			@Override
 			public void serialEvent(SerialPortEvent event) {
-				
+
 				byte[] newData = event.getReceivedData();
 
 				// Lookup start or end byte flag 0x7e
@@ -219,12 +219,12 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 				}
 			}
 		});
-		
-		if(serialDataListenerActive) {
+
+		if (serialDataListenerActive) {
 			log.info("Serial DataListener started.");
 		}
 	}
-	
+
 	public void deactivateSerialDataListener() {
 		serialPort.removeDataListener();
 	}
@@ -258,11 +258,11 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 				}
 
 			} else if (addressing.isCheckupInProgress()) {
-				log.info("HDLC Frame presence check response");				
+				log.info("HDLC Frame presence check response");
 				Device device = new Device(hdlcFrame.getSource(), Arrays.copyOfRange(hdlcFrame.getData(), 2, 16));
-				
+
 				log.info(new String(device.getSerialNumber()));
-				
+
 				for (Device tmpDevice : deviceList) {
 					if (tmpDevice.getHdlcAddress() == device.getHdlcAddress()) {
 						if (!Arrays.equals(tmpDevice.getSerialNumber(), device.getSerialNumber())) {
@@ -278,17 +278,11 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 				// Lookup device task for received data
 				for (Device tmpDevice : deviceList) {
 //					log.info("Search device");
-					if (tmpDevice.getHdlcAddress() == hdlcFrame.getSource()) {
-//						log.info("Search task");
-						LMNWiredTask currentTask = tmpDevice.getFirstTask();
-						// Set Task Data if task is set in device
-						if (currentTask != null) {
-//							log.info("Task found");
-							currentTask.setResponse(hdlcFrame);
-							currentTask.timeOutOccured = false;
-						}else {
-							log.info("Task not found");
-						}
+					LMNWiredTask currentTask = addressing.getCurrentTask();
+					if (tmpDevice.getHdlcAddress() == hdlcFrame.getSource() && currentTask.getDevice() == tmpDevice
+							&& new String(hdlcFrame.getData()).contains(currentTask.getObis())) {
+//						log.info("task found");
+						currentTask.setResponse(hdlcFrame);
 					}
 				}
 
