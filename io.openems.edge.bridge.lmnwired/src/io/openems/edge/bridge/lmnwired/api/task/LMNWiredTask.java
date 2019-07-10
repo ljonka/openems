@@ -26,6 +26,10 @@ public class LMNWiredTask {
 	private final Logger log = LoggerFactory.getLogger(LMNWiredTask.class);
 	public boolean timeOutOccured = true;
 	Float fData;
+	
+	long lastDataTimestamp = 0;
+	Float lastData = (float) 0;
+	Channel<Float> channel;
 
 	public LMNWiredTask(AbstractOpenEmsLMNWiredComponent abstractOpenEmsLMNWiredComponent,
 			BridgeLMNWired bridgeLMNWired, String serialNumber, String obisPart, SymmetricMeter.ChannelId channelId) {
@@ -34,6 +38,8 @@ public class LMNWiredTask {
 		this.obisPart = obisPart;
 		this.serialNumber = serialNumber;
 		this.channelId = channelId;
+		
+		this.channel = abstractOpenEmsLMNWiredComponent.channel(channelId);
 	}
 
 	public Device getDevice() {
@@ -80,23 +86,33 @@ public class LMNWiredTask {
 	 * @param hdlcFrame Raw Data Frame
 	 */
 	public void setResponse(HdlcFrame hdlcFrame) {
-
-		Channel<Float> channel = abstractOpenEmsLMNWiredComponent.channel(channelId);
+		
 		String tmpString = new String(hdlcFrame.getData()).replace(obis + ";","");
 		String[] arrData = tmpString.split("\\*");
 		
 		try {
-			fData = (Float.parseFloat(arrData[0])) * 1000;
+			fData = (Float.parseFloat(arrData[0])) * 1000 * 3600; // KWH in WH and Wh to Ws
 		} catch (Exception e) {
 			log.info(tmpString);
 			return;
 		}
+		if(lastDataTimestamp == 0) {
+			lastDataTimestamp = System.currentTimeMillis();
+			lastData = fData;
+			return;
+		}
+		if((System.currentTimeMillis() - lastDataTimestamp) / 1000 < 10) {
+			return;
+		}
 
-		log.info("Set channel data: " + fData);
+		log.info("Set channel data: " + (fData - lastData));
 		log.info("For device: " + new String(device.getSerialNumber()));
 		log.info("For channel: " + obisPart);
 
-		channel.setNextValue(fData);
+		channel.setNextValue((fData - lastData) / 10);
+		lastDataTimestamp = System.currentTimeMillis();
+		lastData = fData;
+		
 	}
 
 }

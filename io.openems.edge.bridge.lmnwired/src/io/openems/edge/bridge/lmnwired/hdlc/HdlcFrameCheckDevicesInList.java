@@ -7,7 +7,7 @@ import java.util.List;
 import io.openems.edge.bridge.lmnwired.api.Device;
 
 public class HdlcFrameCheckDevicesInList extends HdlcFrame {
-
+	
 	/**
 	 * 
 	 * @param timeslots

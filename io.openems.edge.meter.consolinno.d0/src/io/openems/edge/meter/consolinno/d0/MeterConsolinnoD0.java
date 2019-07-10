@@ -41,7 +41,12 @@ public class MeterConsolinnoD0 extends AbstractOpenEmsLMNWiredComponent
 
 	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
 	protected BridgeLMNWired bridgeLMNWired;
-
+	
+	private String taskIDObis180;
+	private String taskIDObis280;
+	
+	Config config;
+	
 	public MeterConsolinnoD0() {
 		super(OpenemsComponent.ChannelId.values(), //
 				SymmetricMeter.ChannelId.values(), //
@@ -51,6 +56,8 @@ public class MeterConsolinnoD0 extends AbstractOpenEmsLMNWiredComponent
 	@Activate
 	void activate(ComponentContext context, Config config) {
 		super.activate(context, config.id(), config.alias(), config.enabled(), this.cm, config.service_pid());
+		
+		this.config = config;
 
 		// update filter for 'lmnwired'
 		if (OpenemsComponent.updateReferenceFilter(cm, config.service_pid(), "lmnwired", config.lmnwired_id())) {
@@ -60,17 +67,24 @@ public class MeterConsolinnoD0 extends AbstractOpenEmsLMNWiredComponent
 		log.info("Add Tasks for Meter: " + config.serialNumber());
 
 		// Add one read task per obis
+		taskIDObis180 = config.id() + "_180";
+		taskIDObis280 = config.id() + "_280";
+		
 		if (config.use180())
-			this.bridgeLMNWired.addTask(config.id() + "_180", new LMNWiredTask(this, bridgeLMNWired, config.serialNumber(),
+			this.bridgeLMNWired.addTask(taskIDObis180, new LMNWiredTask(this, bridgeLMNWired, config.serialNumber(),
 					"1.8.0", SymmetricMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY));
 		if (config.use280())
-			this.bridgeLMNWired.addTask(config.id() + "_280", new LMNWiredTask(this, bridgeLMNWired, config.serialNumber(),
+			this.bridgeLMNWired.addTask(taskIDObis280, new LMNWiredTask(this, bridgeLMNWired, config.serialNumber(),
 					"2.8.0", SymmetricMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY));
 	}
 
 	@Deactivate
 	protected void deactivate() {
 		super.deactivate();
+		if (config.use180())
+			this.bridgeLMNWired.removeTask(taskIDObis180);
+		if (config.use280())
+			this.bridgeLMNWired.removeTask(taskIDObis280);
 	}
 
 	@Override

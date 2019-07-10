@@ -51,12 +51,13 @@ public class PackageHandler {
 
 	@Reference
 	protected ConfigurationAdmin cm;
-	
+
 	/**
 	 * 
 	 * @param serialPort
 	 */
-	public PackageHandler(SerialPort serialPort, int timeSlots, int timeslotsTime, BridgeLMNWiredImpl bridgeLMNWiredImpl) {
+	public PackageHandler(SerialPort serialPort, int timeSlots, int timeslotsTime,
+			BridgeLMNWiredImpl bridgeLMNWiredImpl) {
 		this.bridgeLMNWiredImpl = bridgeLMNWiredImpl;
 		this.serialPort = serialPort;
 		hdlcFrameAddressingOnEmptyList = new HdlcFrameAddressingOnEmptyList((byte) timeSlots);
@@ -83,13 +84,16 @@ public class PackageHandler {
 		public void run() {
 
 			if (!isAddressingInProgress() && !isCheckupInProgress()) {
-				
-				bridgeLMNWiredImpl.deactivateSerialDataListener();
-				bridgeLMNWiredImpl.activateSerialDataListener();
+
+				bridgeLMNWiredImpl.deactivateSerialDataListener();				
 
 				// Noch kein Teilnehmer vorhanden
 				if (bridgeLMNWiredImpl.getDeviceList().isEmpty()) {
 					log.info(testRequestDevicesOnZero);
+
+					// Debug output
+//					log.info("Current time before send: " + System.nanoTime());
+
 					serialPort.writeBytes(hdlcFrameAddressingOnEmptyList.getBytes(),
 							hdlcFrameAddressingOnEmptyList.getLength());
 				} else { // Mindestens 1 Teilnehmer vorhanden
@@ -101,7 +105,10 @@ public class PackageHandler {
 					serialPort.writeBytes(hdlcFrameAddressingOnDevicesInList.getBytes(),
 							hdlcFrameAddressingOnDevicesInList.getLength());
 				}
+				
+				bridgeLMNWiredImpl.activateSerialDataListener();
 
+				bridgeLMNWiredImpl.resetCurrentPackage();
 
 				setTimeStampAddressing();
 
@@ -118,7 +125,7 @@ public class PackageHandler {
 		public void run() {
 			presenceCheckInProgress = false;
 			clearSilentDevices();
-			//bridgeLMNWiredImpl.updateConfigDevices();
+			// bridgeLMNWiredImpl.updateConfigDevices();
 		}
 	};
 
@@ -129,12 +136,12 @@ public class PackageHandler {
 
 			if (!bridgeLMNWiredImpl.getDeviceList().isEmpty() && !isCheckupInProgress() && !isAddressingInProgress()) {
 
-				log.info("Inside Conditions: " + testRequestDevicePresenceCheck + " for " + bridgeLMNWiredImpl.getDeviceList().size()
-						+ " devices");
-				hdlcFrameCheckDevicesInList = new HdlcFrameCheckDevicesInList((byte) timeSlots, bridgeLMNWiredImpl.getDeviceList());
-				
-				bridgeLMNWiredImpl.deactivateSerialDataListener();
-				bridgeLMNWiredImpl.activateSerialDataListener();
+				log.info("Inside Conditions: " + testRequestDevicePresenceCheck + " for "
+						+ bridgeLMNWiredImpl.getDeviceList().size() + " devices");
+				hdlcFrameCheckDevicesInList = new HdlcFrameCheckDevicesInList((byte) timeSlots,
+						bridgeLMNWiredImpl.getDeviceList());
+
+//				bridgeLMNWiredImpl.deactivateSerialDataListener();
 
 				if (serialPort.isOpen())
 					serialPort.writeBytes(hdlcFrameCheckDevicesInList.getBytes(),
@@ -142,6 +149,10 @@ public class PackageHandler {
 				else {
 					log.info("Error: Serial Port is not available.");
 				}
+
+//				bridgeLMNWiredImpl.activateSerialDataListener();
+
+				bridgeLMNWiredImpl.resetCurrentPackage();
 
 				setTimeStampCheckPresence();
 
@@ -165,38 +176,53 @@ public class PackageHandler {
 				currentDataRequestTask = dataRequestQueue.poll();
 
 				log.info("Request obis data for device");
-				
+
 				currentDataRequestTask.timeOutOccured = true;
-				
+
 //				bridgeLMNWiredImpl.deactivateSerialDataListener();
+//				bridgeLMNWiredImpl.activateSerialDataListener();
 
 				serialPort.writeBytes(currentDataRequestTask.getHdlcData(), currentDataRequestTask.getHdlcDataLength());
-				
-//				bridgeLMNWiredImpl.activateSerialDataListener();
-				
+
+				bridgeLMNWiredImpl.resetCurrentPackage();
+
 			}
 
 		}
 
 	};
-	
+
+	// Get Data from Device
+	Runnable runnableRestSerialDataListener = new Runnable() {
+
+		public void run() {
+
+			bridgeLMNWiredImpl.deactivateSerialDataListener();
+			bridgeLMNWiredImpl.activateSerialDataListener();
+		}
+
+	};
+
 	public LMNWiredTask getCurrentTask() {
 		return currentDataRequestTask;
 	}
 
 	protected void startServiceHandler() {
 		// Live
-		
-		//TODO: Activate again
-		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 10, TimeUnit.SECONDS);
-		service.scheduleAtFixedRate(runnableCheckDevicePresence, 5, 10, TimeUnit.SECONDS);
-		service.scheduleAtFixedRate(runnableDataRequest, 0, 200, TimeUnit.MILLISECONDS);
+
+		// TODO: Activate again
+		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 4, TimeUnit.SECONDS);
+//		service.scheduleAtFixedRate(runnableCheckDevicePresence, 5, 10, TimeUnit.SECONDS);
+//		service.scheduleAtFixedRate(runnableDataRequest, 0, 200, TimeUnit.MILLISECONDS);
+//		
 
 		// Testing
 //		service.scheduleAtFixedRate(runnableInviteNewDevices, 0, 200, TimeUnit.MILLISECONDS);
 //				service.schedule(runnableInviteNewDevices, 0,TimeUnit.SECONDS);
 //				service.schedule(runnableCheckDevicePresence, 5, TimeUnit.SECONDS);
 //				service.scheduleAtFixedRate(runnableTestDataRequest, 0, 1, TimeUnit.SECONDS);
+//		service.scheduleAtFixedRate(runnableRestSerialDataListener, 0, 10, TimeUnit.MILLISECONDS);
+
 	}
 
 	public void addHdlcDataRequest(LMNWiredTask lMNWiredTask) {
@@ -212,7 +238,7 @@ public class PackageHandler {
 					deviceRemoved = true;
 				}
 			}
-		
+
 		return deviceRemoved;
 	}
 

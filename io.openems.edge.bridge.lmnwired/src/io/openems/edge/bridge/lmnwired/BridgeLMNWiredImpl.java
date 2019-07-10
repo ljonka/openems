@@ -65,12 +65,13 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 	private byte currentPackage[];
 
-	long receiveTimeMeasure;
 	int timeslotsTime;
 	int timeslots;
 	int timeSlotDurationInMs;
 	NumberFormat numberFormat = new DecimalFormat("0.0");
 	Config config;
+	
+	boolean serialPortFound;
 
 	@Reference
 	protected ConfigurationAdmin cm;
@@ -103,8 +104,34 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 		this.worker.activate(config.id());
 		this.config = config;
+		
+		timeslotsTime = config.timeSlots() * 2 * config.timeSlotDurationInMs();
+		timeslots = config.timeSlots();
+		timeSlotDurationInMs = config.timeSlotDurationInMs();
 
-		serialPort = SerialPort.getCommPort(config.portName());
+		numberFormat.setRoundingMode(RoundingMode.DOWN);
+
+		activateSerialPort();
+
+		addressing = new PackageHandler(serialPort, config.timeSlots(), timeslotsTime, this);
+	}
+
+	public void activateSerialPort() {
+
+		SerialPort[] serialPorts = SerialPort.getCommPorts();
+		serialPortFound = false;
+		for (SerialPort tmpSerialPort : serialPorts) {
+			String portName = "/dev/" + tmpSerialPort.getSystemPortName();
+			if (portName.equals(config.portName())) {
+				serialPort = tmpSerialPort;
+				serialPortFound = true;
+			}
+		}
+
+		if (!serialPortFound) {
+			log.info("SerialPort not found");
+			return;
+		}
 
 		serialPort.setNumDataBits(8);
 		serialPort.setNumStopBits(1);
@@ -116,11 +143,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		timeslots = config.timeSlots();
 		timeSlotDurationInMs = config.timeSlotDurationInMs();
 
-		numberFormat.setRoundingMode(RoundingMode.DOWN);
-
 		activateSerialDataListener();
-
-		addressing = new PackageHandler(serialPort, config.timeSlots(), timeslotsTime, this);
 	}
 
 	@Deactivate
@@ -172,6 +195,10 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 
 		}
 	}
+	
+	public void resetCurrentPackage() {
+		currentPackage = null;
+	}
 
 	/**
 	 * Activate data listener for incoming packages
@@ -190,21 +217,22 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 			public void serialEvent(SerialPortEvent event) {
 
 				byte[] newData = event.getReceivedData();
+				log.info("Num Bytes received: " + newData.length);
+				
+//				log.info("Current time: " + (System.nanoTime() / 1000000));
 
 				// Lookup start or end byte flag 0x7e
 				if (newData[0] == 0x7e) { // means start
-					// Measure Time
-					receiveTimeMeasure = addressing.setTimeStampAddressingEnd();
 					currentPackage = newData;
 					if (newData[newData.length - 1] == 0x7e) { // For Short Package including start and end in one
-						handleReturn(currentPackage, receiveTimeMeasure);
+						handleReturn(currentPackage);
 					}
 				} else if (newData[newData.length - 1] == 0x7e) { // means end
 					ByteArrayOutputStream concatData = new ByteArrayOutputStream();
 					try {
 						concatData.write(currentPackage);
 						concatData.write(newData);
-						handleReturn(concatData.toByteArray(), receiveTimeMeasure);
+						handleReturn(concatData.toByteArray());
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
@@ -221,7 +249,9 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		});
 
 		if (serialDataListenerActive) {
-			log.info("Serial DataListener started.");
+			log.debug("Serial DataListener started.");
+		}else {
+			log.info("Serial DataListener not started!.");
 		}
 	}
 
@@ -229,10 +259,16 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		serialPort.removeDataListener();
 	}
 
-	protected void handleReturn(byte data[], long receiveTimeMeasure) {
+	protected void handleReturn(byte data[]) {
 		HdlcFrame hdlcFrame = HdlcFrame.createHdlcFrameFromByte(data);
 		if (hdlcFrame != null) {
 //			log.debug("HDLC Frame received, party hard!");
+			// Measure Time
+			long receiveTimeMeasure = addressing.setTimeStampAddressingEnd();
+			
+			//Debug output
+//			log.info("Current time after send: " + System.nanoTime());
+			
 			long timeDiff = receiveTimeMeasure - addressing.getTimeStampAddressing();
 			long usedTimeSlotBeta = (timeDiff - addressing.getTimeStampAddressing() + timeSlotDurationInMs)
 					/ (2 * timeSlotDurationInMs);
@@ -251,7 +287,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 						}
 					}
 					if (!deviceInList) { // Finally add to list
-						deviceList.add(device);
+//						deviceList.add(device);
 					}
 				} else { // in guard time, ignore package
 					log.debug("HDLC Frame is new device data but in guard time!");
@@ -289,7 +325,8 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 			}
 		} else {
 			log.debug("HDLC Frame received, check HCS or FCS");
-		}
+		}		
+
 	}
 
 	public PackageHandler getAddressing() {
