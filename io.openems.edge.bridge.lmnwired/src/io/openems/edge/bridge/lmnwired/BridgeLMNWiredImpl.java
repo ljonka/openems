@@ -217,9 +217,9 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 			public void serialEvent(SerialPortEvent event) {
 
 				byte[] newData = event.getReceivedData();
-				log.info("Num Bytes received: " + newData.length);
+				log.debug("Num Bytes received: " + newData.length);
 				
-//				log.info("Current time: " + (System.nanoTime() / 1000000));
+//				log.debug("Current time: " + (System.nanoTime() / 1000000));
 
 				// Lookup start or end byte flag 0x7e
 				if (newData[0] == 0x7e) { // means start
@@ -251,7 +251,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		if (serialDataListenerActive) {
 			log.debug("Serial DataListener started.");
 		}else {
-			log.info("Serial DataListener not started!.");
+			log.debug("Serial DataListener not started!.");
 		}
 	}
 
@@ -267,7 +267,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 			long receiveTimeMeasure = addressing.setTimeStampAddressingEnd();
 			
 			//Debug output
-//			log.info("Current time after send: " + System.nanoTime());
+//			log.debug("Current time after send: " + System.nanoTime());
 			
 			long timeDiff = receiveTimeMeasure - addressing.getTimeStampAddressing();
 			long usedTimeSlotBeta = (timeDiff - addressing.getTimeStampAddressing() + timeSlotDurationInMs)
@@ -276,7 +276,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 			double tmpTimeSlotFactor = usedTimeSlotBeta - usedTimeSlot;
 			if (addressing.isAddressingInProgress()) {
 				if (tmpTimeSlotFactor <= 0.5) { // in data time window
-					log.info("HDLC Frame is new device data!");
+					log.debug("HDLC Frame is new device data!");
 					// Add device to List
 					Device device = new Device(hdlcFrame.getSource(), Arrays.copyOfRange(hdlcFrame.getData(), 2, 16));
 					// Check if device is already in list
@@ -294,10 +294,10 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 				}
 
 			} else if (addressing.isCheckupInProgress()) {
-				log.info("HDLC Frame presence check response");
+				log.debug("HDLC Frame presence check response");
 				Device device = new Device(hdlcFrame.getSource(), Arrays.copyOfRange(hdlcFrame.getData(), 2, 16));
 
-				log.info(new String(device.getSerialNumber()));
+				log.debug(new String(device.getSerialNumber()));
 
 				for (Device tmpDevice : deviceList) {
 					if (tmpDevice.getHdlcAddress() == device.getHdlcAddress()) {
@@ -309,15 +309,15 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 				}
 
 			} else {
-				log.info("HDLC Frame is data");
+				log.debug("HDLC Frame is data");
 
 				// Lookup device task for received data
 				for (Device tmpDevice : deviceList) {
-//					log.info("Search device");
+//					log.debug("Search device");
 					LMNWiredTask currentTask = addressing.getCurrentTask();
 					if (tmpDevice.getHdlcAddress() == hdlcFrame.getSource() && currentTask.getDevice() == tmpDevice
 							&& new String(hdlcFrame.getData()).contains(currentTask.getObis())) {
-//						log.info("task found");
+//						log.debug("task found");
 						currentTask.setResponse(hdlcFrame);
 					}
 				}
@@ -355,7 +355,7 @@ public class BridgeLMNWiredImpl extends AbstractOpenemsComponent
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-			log.info(e.getMessage());
+			log.debug(e.getMessage());
 		}
 	}
 

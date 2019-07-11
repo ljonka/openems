@@ -66,7 +66,7 @@ public class LMNWiredTask {
 					device = tmpDevice;
 					obis = new String(device.getBytesForObisRequest(obisPart));
 
-					log.info("Reqeust Data for channel: " + obisPart);					
+					log.debug("Reqeust Data for channel: " + obisPart);					
 
 					HdlcFrameDeviceDataRequest hdlcFrameDeviceDataRequest = new HdlcFrameDeviceDataRequest(device,
 							obisPart);
@@ -105,9 +105,9 @@ public class LMNWiredTask {
 			return;
 		}
 
-		log.info("Set channel data: " + (fData - lastData));
-		log.info("For device: " + new String(device.getSerialNumber()));
-		log.info("For channel: " + obisPart);
+		log.debug("Set channel data: " + (fData - lastData));
+		log.debug("For device: " + new String(device.getSerialNumber()));
+		log.debug("For channel: " + obisPart);
 
 		channel.setNextValue((fData - lastData) / 10);
 		lastDataTimestamp = System.currentTimeMillis();
